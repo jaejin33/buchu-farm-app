@@ -1,0 +1,31 @@
+# 의존성·빌드 결과
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# 환경 변수 (Supabase URL·키)
+.env
+.env.*
+!.env.example
+
+# 옵시디언 설정
+.obsidian/
+
+# 원본 자료 (영농일지 사진, 정산 문자 캡처 등)
+private/
+
+# 개인 Claude 설정
+.claude/settings.local.json
+.claude/worktrees/
+CLAUDE.local.md
+
+# 에디터·OS
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# 로그
+*.log
+npm-debug.log*

@@ -21,18 +21,6 @@
   scroll-margin-bottom: 6rem;
 }
 
-/* 날짜는 한 줄로: [날짜 오늘] [2026-10-22]. 화면 위쪽을 덜 차지해 아래 내용이 더 보이게 */
-.date-card {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 0.4rem 0.8rem;
-}
-
-.date-card .field-error {
-  grid-column: 1 / -1;
-}
-
 .field-label {
   margin: 0;
   font-size: 1rem;
@@ -81,6 +69,48 @@
   color: var(--text-muted);
 }
 
+/* ---- 날짜: [10월 22일 (목)        바꾸기] ----
+   보이는 글자는 직접 그리고, 진짜 날짜 칸(<input type="date">)은 투명하게 그 위를 덮는다.
+   누르면 투명한 날짜 칸이 눌려 폰의 달력이 열린다 */
+
+.date-field {
+  position: relative; /* 안의 투명한 날짜 칸을 이 상자에 맞춰 덮기 위해 */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.date-change {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--primary-strong);
+}
+
+.date-field input {
+  position: absolute;
+  inset: 0; /* 상자 전체를 덮는다 (top·right·bottom·left 모두 0) */
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-width: 100%; /* 아이폰 사파리는 날짜 칸에 자기 너비를 고집해서 width만으로는 안 늘어난다 */
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  -webkit-appearance: none; /* 브라우저 기본 날짜 칸 모양을 꺼야 위의 너비가 먹는다 */
+  appearance: none;
+  opacity: 0; /* 보이지 않지만 누를 수는 있다 */
+  font-size: 1rem; /* 아이폰은 16px보다 작은 칸을 누르면 화면을 확대해서, 크게 둔다 */
+  cursor: pointer;
+}
+
+/* 투명한 날짜 칸이 눌렸을 때(키보드로 옮겨 왔을 때 포함) 바깥 상자에 초록 테두리 */
+.date-field:focus-within {
+  border-color: var(--primary);
+}
+
 /* ---- 고르는 버튼 ---- */
 
 .choices {
@@ -106,7 +136,8 @@
   align-items: center;
   justify-content: center;
   min-height: 3rem;
-  padding: 0.4rem 0.8rem;
+  /* 양옆 여백은 작게: 360px 폭 폰에서 한 줄에 셋일 때 "웃거름"이 두 줄로 꺾이지 않게 */
+  padding: 0.4rem 0.3rem;
   border: 2px solid var(--line-strong);
   border-radius: 14px;
   background: var(--surface);

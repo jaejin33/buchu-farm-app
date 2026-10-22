@@ -2,7 +2,7 @@
 // 날짜(기본 오늘) → 무엇을 했는지 → (필요하면 자세한 내용) → 저장. 버튼 몇 번으로 30초 안에 끝나게 만든다.
 // 저장은 recordRepository를 거친다. 기록과 "오늘"은 props로 받는다.
 
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { DEFAULT_CYCLE_DAYS } from '../config/farm'
 import { addRecord, type NewRecord } from '../data/recordRepository'
 import { addDays, getHouseStatus, lastHarvestRecord } from '../domain/harvestCalc'
@@ -70,6 +70,7 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const detailRef = useRef<HTMLElement>(null) // 종류를 고르면 나타나는 자세한 내용 카드
+  const dateInputRef = useRef<HTMLInputElement>(null) // 투명하게 덮어 둔 진짜 날짜 칸
 
   // 고른 뒤 새로 나타난 내용이 화면 아래(저장 버튼 뒤)에 숨지 않도록 보이는 곳까지 스크롤한다
   useEffect(() => {
@@ -143,6 +144,19 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
     }
   }
 
+  /** 날짜 상자를 누르면 달력을 연다. 투명한 날짜 칸이 직접 눌렸으면 브라우저가 이미 열었으므로 그대로 둔다 */
+  function openDatePicker(e: MouseEvent<HTMLDivElement>) {
+    const input = dateInputRef.current
+    if (input === null || e.target === input) return
+    try {
+      input.showPicker() // 달력 열기 (최근 브라우저)
+    } catch {
+      // showPicker가 없는 옛 브라우저: 날짜 칸을 누른 것처럼 한다
+      input.focus()
+      input.click()
+    }
+  }
+
   /** 문제를 고르면 "생김 / 해결됨"을 지금 상태의 반대로 미리 골라 둔다 (지금 있으면 해결됨, 없으면 생김) */
   function chooseProblem(p: HouseProblem) {
     setProblem(p)
@@ -166,19 +180,26 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
       </header>
 
       <form onSubmit={handleSubmit}>
-        <section className="form-card date-card">
+        <section className="form-card">
           <label className="field-label" htmlFor="work-date">
             날짜
             {dateOk && <span className="field-hint"> {relativeDay(workDate, today)}</span>}
           </label>
-          <input
-            id="work-date"
-            className="text-input"
-            type="date"
-            value={workDate}
-            max={today}
-            onChange={(e) => setWorkDate(e.target.value)}
-          />
+          {/* 날짜 글자는 직접 그린다 ("10월 22일 (목)"). 폰 브라우저가 그리는 날짜 칸 글자는 폰마다 모양이 달라
+              좁은 폰에서 두 줄로 꺾였다. 진짜 날짜 칸은 투명하게 위에 덮어서, 누르면 폰의 달력이 그대로 열린다.
+              폰에 따라 투명한 칸이 상자 전체를 덮지 못해서("바꾸기"가 안 눌림), 상자 어디를 눌러도 달력을 직접 연다 */}
+          <div className="text-input date-field" onClick={openDatePicker}>
+            <span>{workDate === '' ? '날짜를 골라 주세요' : formatDate(workDate)}</span>
+            <span className="date-change">바꾸기</span>
+            <input
+              ref={dateInputRef}
+              id="work-date"
+              type="date"
+              value={workDate}
+              max={today}
+              onChange={(e) => setWorkDate(e.target.value)}
+            />
+          </div>
           {!dateOk && <p className="field-error">오늘이나 지난 날짜를 골라 주세요</p>}
         </section>
 

@@ -2,7 +2,7 @@
 // "오늘"은 항상 인자로 받는다. 이 파일 안에서는 현재 시각을 읽지 않는다.
 // 앱은 약 때문에 벨 수 있는지 판단하지 않는다 (예외가 많아 사람이 판단한다). 며칠 지났는지만 센다.
 
-import type { FarmRecord, HarvestRecord, HarvestStartRecord, SprayRecord } from './types'
+import type { FarmRecord, HarvestRecord, HarvestStartRecord, HouseProblem, ProblemRecord, SprayRecord } from './types'
 
 export type HouseStatusKind =
   | 'harvesting' // 수확 중 (시작은 했고 아직 완료 안 함)
@@ -20,7 +20,12 @@ export interface HouseStatus {
   daysSinceSpray: number | null
   /** 수확 가능일 = 마지막 수확일 + 그 기록의 cycle_days. 수확 기록이 없으면 null. 목록 정렬에 쓴다 */
   readyDate: string | null
+  /** 지금 있는 문제. 없으면 빈 배열. PROBLEM_ORDER 순서 */
+  problems: HouseProblem[]
 }
+
+/** 문제 종류. 화면에 이 순서로 보여준다 */
+const PROBLEM_ORDER: readonly HouseProblem[] = ['drainage', 'mycelium']
 
 // ---- 날짜 계산 ----
 // "YYYY-MM-DD" 문자열을 "1970-01-01부터 며칠째"인 정수로 바꿔 더하고 뺀다.
@@ -101,6 +106,7 @@ function lastOf<T extends FarmRecord>(
  * - 자라는 중: 아직 수확 가능일 전
  * - ⚪ 수확 기록 없음: 자랐는지 판단할 근거가 없음 (약·비료 기록만 있어도 여기에 해당)
  * 약 기록은 상태에 영향을 주지 않고 경과 일수만 센다.
+ * 문제(💧 배수 불량, 🍄 균사 많음)는 종류마다 마지막 기록이 "생김"이면 지금 있는 것으로 본다.
  *
  * records에는 모든 동의 기록을 넣어도 된다. houseNo 동의 기록만 골라 계산한다.
  */
@@ -113,6 +119,13 @@ export function getHouseStatus(records: readonly FarmRecord[], houseNo: number, 
     daysSinceHarvest: harvest === null ? null : daysBetween(harvest.work_date, today),
     daysSinceSpray: spray === null ? null : daysBetween(spray.work_date, today),
     readyDate: harvest === null ? null : addDays(harvest.work_date, harvest.cycle_days),
+    problems: PROBLEM_ORDER.filter((kind) => {
+      const last = lastOf(
+        records,
+        (r): r is ProblemRecord => r.type === 'problem' && r.house_no === houseNo && r.problem === kind,
+      )
+      return last !== null && !last.resolved
+    }),
   }
 
   // 시작을 누른 뒤 아직 완료를 안 눌렀으면 수확 중이다. 같은 날 시작·완료면 나중에 입력한 쪽을 따른다

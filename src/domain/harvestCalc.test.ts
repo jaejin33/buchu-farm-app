@@ -7,6 +7,8 @@ import type {
   HarvestAmountRecord,
   HarvestRecord,
   HarvestStartRecord,
+  HouseProblem,
+  ProblemRecord,
   SprayRecord,
   TopDressingRecord,
 } from './types'
@@ -25,6 +27,16 @@ function harvest(id: string, house_no: number, work_date: string, cycle_days = 3
 
 function harvestStart(id: string, house_no: number, work_date: string): HarvestStartRecord {
   return { ...common, id, house_no, work_date, type: 'harvest_start' }
+}
+
+function problem(
+  id: string,
+  house_no: number,
+  work_date: string,
+  kind: HouseProblem,
+  resolved = false,
+): ProblemRecord {
+  return { ...common, id, house_no, work_date, type: 'problem', problem: kind, resolved }
 }
 
 function harvestAmount(id: string, house_no: number, target_id: string): HarvestAmountRecord {
@@ -115,6 +127,7 @@ describe('getHouseStatus', () => {
       daysSinceHarvest: null,
       daysSinceSpray: null,
       readyDate: null,
+      problems: [],
     })
   })
 
@@ -130,6 +143,7 @@ describe('getHouseStatus', () => {
       daysSinceHarvest: null,
       daysSinceSpray: 3,
       readyDate: null,
+      problems: [],
     })
   })
 
@@ -140,6 +154,7 @@ describe('getHouseStatus', () => {
       daysSinceHarvest: 20,
       daysSinceSpray: null,
       readyDate: '2026-11-05',
+      problems: [],
     })
   })
 
@@ -237,6 +252,7 @@ describe('getHouseStatus', () => {
       daysSinceHarvest: 50,
       daysSinceSpray: null,
       readyDate: '2026-10-06',
+      problems: [],
     })
     expect(getHouseStatus(records, 2, today).kind).toBe('growing')
   })
@@ -254,6 +270,7 @@ describe('getHouseStatus: 수확 중', () => {
       daysSinceHarvest: null,
       daysSinceSpray: null,
       readyDate: null,
+      problems: [],
     })
   })
 
@@ -273,6 +290,7 @@ describe('getHouseStatus: 수확 중', () => {
       daysSinceHarvest: 41,
       daysSinceSpray: 3,
       readyDate: '2026-10-15',
+      problems: [],
     })
   })
 
@@ -311,5 +329,83 @@ describe('getHouseStatus: 수확 중', () => {
     const records = [harvest('h1', 1, '2026-09-01'), harvestStart('s', 2, today)]
     expect(getHouseStatus(records, 1, today).kind).toBe('ready')
     expect(getHouseStatus(records, 2, today).kind).toBe('harvesting')
+  })
+})
+
+// ---- 하우스 문제 ----
+
+describe('getHouseStatus: 문제', () => {
+  const today = '2026-10-21'
+  const problemsOf = (records: FarmRecord[], houseNo = 1) => getHouseStatus(records, houseNo, today).problems
+
+  it('문제 기록이 없으면 이상 없음 (빈 배열)', () => {
+    expect(problemsOf([harvest('h', 1, '2026-10-01')])).toEqual([])
+  })
+
+  it('"생김" 기록이 있으면 그 문제가 있다', () => {
+    expect(problemsOf([problem('p', 1, '2026-10-01', 'drainage')])).toEqual(['drainage'])
+  })
+
+  it('생긴 뒤 "해결됨" 기록이 있으면 없어진다', () => {
+    const records = [problem('p1', 1, '2026-09-01', 'drainage'), problem('p2', 1, '2026-10-10', 'drainage', true)]
+    expect(problemsOf(records)).toEqual([])
+  })
+
+  it('해결된 뒤 다시 생기면 다시 있다', () => {
+    const records = [
+      problem('p1', 1, '2026-09-01', 'drainage'),
+      problem('p2', 1, '2026-09-20', 'drainage', true),
+      problem('p3', 1, '2026-10-10', 'drainage'),
+    ]
+    expect(problemsOf(records)).toEqual(['drainage'])
+  })
+
+  it('두 문제는 따로 판단하고, 입력 순서와 상관없이 배수 → 균사 순서로 준다', () => {
+    const records = [
+      problem('m', 1, '2026-10-01', 'mycelium'),
+      problem('d1', 1, '2026-09-01', 'drainage'),
+      problem('d2', 1, '2026-10-05', 'drainage', true), // 배수만 해결
+      problem('d3', 1, '2026-10-15', 'drainage'), // 배수 다시 생김
+    ]
+    expect(problemsOf(records)).toEqual(['drainage', 'mycelium'])
+  })
+
+  it('한 문제가 해결돼도 다른 문제는 남는다', () => {
+    const records = [
+      problem('d', 1, '2026-09-01', 'drainage'),
+      problem('m', 1, '2026-09-01', 'mycelium'),
+      problem('m2', 1, '2026-10-01', 'mycelium', true),
+    ]
+    expect(problemsOf(records)).toEqual(['drainage'])
+  })
+
+  it('"생김" 기록을 취소하면 없어진다', () => {
+    expect(problemsOf([problem('p', 1, '2026-10-01', 'drainage'), cancel('c', 1, 'p')])).toEqual([])
+  })
+
+  it('"해결됨" 기록을 취소하면 다시 있다', () => {
+    const records = [
+      problem('p1', 1, '2026-09-01', 'drainage'),
+      problem('p2', 1, '2026-10-10', 'drainage', true),
+      cancel('c', 1, 'p2'),
+    ]
+    expect(problemsOf(records)).toEqual(['drainage'])
+  })
+
+  it('같은 날 생김·해결됨이 둘 다 있으면 나중에 입력한 쪽을 따른다', () => {
+    const found = { ...problem('p1', 1, today, 'drainage'), recorded_at: '2026-10-21T08:00:00+09:00' }
+    const fixed = { ...problem('p2', 1, today, 'drainage', true), recorded_at: '2026-10-21T17:00:00+09:00' }
+    expect(problemsOf([fixed, found])).toEqual([])
+  })
+
+  it('다른 동의 문제는 보지 않는다', () => {
+    const records = [problem('p', 2, '2026-10-01', 'mycelium')]
+    expect(problemsOf(records, 1)).toEqual([])
+    expect(problemsOf(records, 2)).toEqual(['mycelium'])
+  })
+
+  it('문제는 수확 상태에 영향을 주지 않는다', () => {
+    const records: FarmRecord[] = [harvest('h', 1, '2026-09-01'), problem('p', 1, '2026-10-01', 'drainage')]
+    expect(getHouseStatus(records, 1, today).kind).toBe('ready')
   })
 })

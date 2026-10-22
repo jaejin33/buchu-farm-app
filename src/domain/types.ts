@@ -7,11 +7,11 @@ export type HouseProblem =
   | 'drainage' // 💧 배수가 안 됨
   | 'mycelium' // 🍄 버섯균사가 많음
 
+/** 하우스 고정 정보. 문제 상태는 수시로 바뀌어서 여기 두지 않고 ProblemRecord로 남긴다 */
 export interface House {
   no: number // 동 번호 (1~25)
   zone: string // 구역 이름
   crop: string // 작물. 지금은 모두 부추지만 다른 작물을 심을 수 있어 항목으로 둔다
-  problems: HouseProblem[] // 문제가 없으면 빈 배열
 }
 
 // ---- 기록 ----
@@ -25,6 +25,7 @@ export type RecordType =
   | 'harvest_start'
   | 'harvest'
   | 'harvest_amount'
+  | 'problem'
   | 'cancel'
 
 /** 모든 기록에 공통으로 들어가는 항목 */
@@ -75,6 +76,13 @@ export interface HarvestAmountRecord extends RecordBase {
   bunches: number // 단 수. 박스로 환산하지 않고 따로 둔다
 }
 
+/** 하우스 문제 생김 / 해결됨. 같은 동·같은 문제는 마지막 기록을 따른다 */
+export interface ProblemRecord extends RecordBase {
+  type: 'problem'
+  problem: HouseProblem
+  resolved: boolean // false = 생김, true = 해결됨
+}
+
 /** 기록 취소. target_id의 기록을 화면과 계산에서 뺀다 */
 export interface CancelRecord extends RecordBase {
   type: 'cancel'
@@ -90,4 +98,5 @@ export type FarmRecord =
   | HarvestStartRecord
   | HarvestRecord
   | HarvestAmountRecord
+  | ProblemRecord
   | CancelRecord

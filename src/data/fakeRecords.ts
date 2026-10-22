@@ -4,7 +4,7 @@
 
 import { DEFAULT_CYCLE_DAYS } from '../config/farm'
 import { addDays } from '../domain/harvestCalc'
-import type { FarmRecord } from '../domain/types'
+import type { FarmRecord, HouseProblem } from '../domain/types'
 
 export function makeFakeRecords(today: string): FarmRecord[] {
   let seq = 0
@@ -52,6 +52,12 @@ export function makeFakeRecords(today: string): FarmRecord[] {
     ...base(houseNo, daysAgo),
     type: 'fertigation',
   })
+  const problem = (houseNo: number, daysAgo: number, kind: HouseProblem, resolved = false): FarmRecord => ({
+    ...base(houseNo, daysAgo),
+    type: 'problem',
+    problem: kind,
+    resolved,
+  })
   const cancel = (target: FarmRecord): FarmRecord => ({
     ...base(target.house_no, 0),
     type: 'cancel',
@@ -90,5 +96,11 @@ export function makeFakeRecords(today: string): FarmRecord[] {
     // 23번 동: 기록 없음 ⚪
     harvest(24, 31), // 수확 후 31일
     harvest(25, 42), // 🟢 수확 후 42일
+
+    // 문제 (처음엔 모두 이상 없음. 생긴 동만 기록)
+    problem(3, 20, 'drainage'), // 3번 동 💧 배수 불량
+    problem(6, 15, 'mycelium'), // 6번 동 🍄 균사 많음
+    problem(7, 30, 'drainage'), problem(7, 10, 'mycelium'), // 7번 동 💧🍄 둘 다
+    problem(20, 30, 'drainage'), problem(20, 5, 'drainage', true), // 20번 동: 배수 불량이었다가 해결됨 → 배지 없음
   ]
 }

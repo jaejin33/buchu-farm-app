@@ -51,7 +51,8 @@
 - **기록은 수정·삭제하지 않고 추가만 한다.** 잘못 입력한 기록은 `cancel` 기록(취소할 기록의 id를 `target_id`에 넣음)을 새로 추가한다. 수정은 "취소 + 새 기록"이다. 화면에서는 취소된 기록을 숨긴다. 이 규칙 덕분에 두 사람의 기록이 서로 충돌하지 않는다
 - **`cancel` 기록은 취소할 수 없다.** `target_id`가 존재하지 않는 기록을 가리키면 무시한다
 - 기록마다 입력한 사람(`recorded_by`)을 남긴다. 이력 화면에 "아버지 · 3번 동 약"처럼 표시한다
-- 하우스 25동 정보는 `src/config/houses.ts`에 둔다. 앱에서 수정하지 않는다
+- 하우스 25동 정보(번호·구역·작물)는 `src/config/houses.ts`에 둔다. 앱에서 수정하지 않는다
+- **하우스 문제 상태(💧 배수 불량, 🍄 균사 많음)는 수시로 바뀌므로 `problem` 기록으로 남긴다.** 처음에는 모든 동이 이상 없음이다. 문제가 생기면 "생김"(`resolved: false`), 나아지면 "해결됨"(`resolved: true`) 기록을 추가한다. 같은 동·같은 문제는 마지막 기록을 따른다. 정도는 재지 않고 있다/없다만 둔다
 - **`harvest` 기록에는 "수확 가능까지 일수"(`cycle_days`)를 저장한다.** 입력 화면에 농장 기본값(`src/config/farm.ts`, 35일)을 미리 채우고, 바꾸지 않으면 그 값이 들어간다. 나중에 기본값이 바뀌어도 지난 기록은 입력 당시 값 그대로 계산한다
 - **약 목록은 따로 두지 않고, 취소되지 않은 `spray` 기록의 약 이름을 모아 만든다.** 처음 치는 약은 이름을 직접 적고, 다음부터는 목록에서 고른다. 약 종류는 구분하지 않는다
 - **한 동을 하루에 다 못 벨 때가 있다 (길어야 2일).** 그래서 수확은 "수확 시작"(`harvest_start`)과 "수확 완료"(`harvest`) 두 기록으로 남긴다. 시작을 누르면 그 동은 "수확 중"이 되고, 완료를 누르면 끝난다. 하루에 끝나는 날은 시작 없이 완료만 눌러도 된다 (그날 시작·완료로 본다)
@@ -70,6 +71,7 @@
 | `harvest_start` | 수확 시작 | - |
 | `harvest` | 수확 완료 | 수확 가능까지 일수(`cycle_days`) |
 | `harvest_amount` | 수확량 (완료 다음 날 입력) | `target_id`(수확 완료 기록 id), 박스 수(`boxes`), 단 수(`bunches`) |
+| `problem` | 하우스 문제 생김 / 해결됨 | 문제 종류(`problem`: `drainage` / `mycelium`), 해결 여부(`resolved`) |
 | `cancel` | 기록 취소 | `target_id` |
 
 ### Supabase `records` 테이블
@@ -80,11 +82,13 @@ create table records (
   house_no     int  not null,
   work_date    date not null,
   type         text not null check (type in
-                 ('spray','top_dressing','fertigation','harvest_start','harvest','harvest_amount','cancel')),
+                 ('spray','top_dressing','fertigation','harvest_start','harvest','harvest_amount','problem','cancel')),
   pesticide    text,                   -- spray
   cycle_days   int,                    -- harvest
   boxes        int,                    -- harvest_amount
   bunches      int,                    -- harvest_amount
+  problem      text check (problem in ('drainage','mycelium')),  -- problem
+  resolved     boolean,                -- problem
   target_id    uuid,                   -- cancel, harvest_amount
   memo         text,
   recorded_by  uuid not null,          -- Supabase Auth 사용자 id
@@ -114,12 +118,13 @@ create table records (
   - 🟢 **수확 가능**: 오늘 ≥ 수확 가능일
   - **자라는 중**: 오늘 < 수확 가능일. 따로 표시하지 않고 경과 일수만 보여준다
   - ⚪ **수확 기록 없음**: (취소되지 않은) `harvest` 기록이 없음. 약·웃거름·관비 기록만 있어도 여기에 해당한다. 근거 없이 🟢을 띄우지 않기 위해서다
+- **지금 있는 문제** = 문제 종류마다 그 동의 마지막 (취소되지 않은) `problem` 기록이 "생김"(`resolved: false`)인 것
 - 화면에 "약 친 뒤 수확은 농약 포장 표기를 확인하세요" 문구를 표시한다
 
 ## 화면 (3개)
 
-1. **하우스 목록** (`HouseList`): 구역별로 묶은 25동 카드. 수확 후 N일, 약 후 N일, 수확 중, 🟢 수확 가능 표시. 문제 하우스 표시(💧 배수, 🍄 균사). 구역 안에서는 수확 중인 동이 먼저, 그다음 수확 가능일이 이른 순 (수확 기록 없는 동은 뒤)
-2. **기록 입력** (`RecordForm`): 동 선택 → 종류 버튼 → (약이면 약 이름 고르기·적기, 수확은 "수확 시작" / "수확 완료", 완료면 수확 가능까지 일수 확인) → 저장. 완료 다음 날 수확량(박스·단) 입력
+1. **하우스 목록** (`HouseList`): 구역별로 묶은 25동 카드. 수확 후 N일, 약 후 N일, 수확 중, 🟢 수확 가능 표시. 지금 있는 문제 표시("💧 배수 불량", "🍄 균사 많음" 배지). 구역 안에서는 수확 중인 동이 먼저, 그다음 수확 가능일이 이른 순 (수확 기록 없는 동은 뒤)
+2. **기록 입력** (`RecordForm`): 동 선택 → 종류 버튼 → (약이면 약 이름 고르기·적기, 수확은 "수확 시작" / "수확 완료", 완료면 수확 가능까지 일수 확인, 문제면 "생김" / "해결됨") → 저장. 완료 다음 날 수확량(박스·단) 입력
 3. **이력** (`History`): 그 동의 기록을 날짜 역순으로, 입력한 사람과 함께 표시
 
 ## 폴더 구조
@@ -164,9 +169,10 @@ src/
 | 단계 | 내용 | 상태 |
 |---|---|---|
 | 1 | Vite `react-ts` 프로젝트 생성 + `harvestCalc.ts`와 테스트 | ✅ 완료 |
-| 2 | `houses.ts` 설정 + 하우스 목록 화면 (가짜 데이터) | ✅ 완료 (문제 상태는 임시 값) |
+| 2 | `houses.ts` 설정 + 하우스 목록 화면 (가짜 데이터) | ✅ 완료 |
 | 2.5 | 계산과 목록 화면을 "경과 일수" 방식으로 변경 (약 대기 판단 제거, `cycle_days`·`harvest_amount` 추가) | ✅ 완료 |
 | 2.6 | "수확 중" 추가 (`harvest_start` 기록, 수확 시작 → 완료) | ✅ 완료 |
+| 2.7 | 문제 상태를 `houses.ts`에서 `problem` 기록으로 옮김 (처음엔 모두 이상 없음) | ✅ 완료 |
 | 3 | 기록 입력 화면 + Dexie 저장 | ⬜ 다음 |
 | 4 | 이력 화면 | ⬜ |
 | 5 | PWA 설정 (홈 화면 추가, 오프라인) | ⬜ |
@@ -177,7 +183,7 @@ src/
 ## 미확정 사항 (추측하지 말고 물어볼 것)
 
 - 앱에 누가 입력하는지 (아버지만 / 둘 다). 화면은 아버지 기준으로 만들므로 둘 다여도 쓸 수 있다
-- 하우스 구역을 부르는 이름과 💧 배수·🍄 균사 문제가 있는 동 번호 (구역 나눔 6개는 확정, `houses.ts` 참고)
+- 하우스 구역을 부르는 이름 (구역 나눔 6개는 확정, `houses.ts` 참고)
 - 한 박스가 정확히 20단인지 (환산이 필요해질 때 확인)
 - 약 이름을 꼭 적어야 하는지 (3단계 입력 화면에서 결정)
 

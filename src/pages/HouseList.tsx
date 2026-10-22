@@ -97,9 +97,9 @@ export default function HouseList({ houses, records, today }: Props) {
                   </div>
                   {status.kind === 'harvesting' && <span className="badge badge-harvesting">수확 중</span>}
                   {status.kind === 'ready' && <span className="badge badge-ready">수확 가능</span>}
-                  {house.problems.length > 0 && (
+                  {status.problems.length > 0 && (
                     <div className="house-tags">
-                      {house.problems.map((p) => (
+                      {status.problems.map((p) => (
                         <span key={p} className="badge badge-problem">
                           <span aria-hidden="true">{PROBLEM_TAG[p].icon}</span> {PROBLEM_TAG[p].label}
                         </span>

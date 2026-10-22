@@ -33,3 +33,44 @@ body {
   max-width: 640px;
   margin: 0 auto;
 }
+
+/* ---- 기록 입력·이력 화면이 같이 쓰는 머리 ----
+   [‹ 목록]            [지난 기록 ›]
+   1구역
+   3동 기록 */
+
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+}
+
+/* 글자만 있는 버튼. 누를 곳은 크게(높이 2.6rem) 잡는다 */
+.text-button {
+  min-height: 2.6rem;
+  padding: 0 0.4rem;
+  border: 0;
+  background: none;
+  color: var(--text-sub);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.page-header {
+  padding: 0.2rem 0.4rem 0;
+}
+
+.page-header p {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.page-header h1 {
+  margin: 0.1rem 0 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}

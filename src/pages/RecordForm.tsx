@@ -5,10 +5,10 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { DEFAULT_CYCLE_DAYS } from '../config/farm'
 import { addRecord, type NewRecord } from '../data/recordRepository'
-import { addDays, daysBetween, getHouseStatus, lastHarvestRecord } from '../domain/harvestCalc'
+import { addDays, getHouseStatus, lastHarvestRecord } from '../domain/harvestCalc'
 import { latestHarvestAmount, pesticideNames } from '../domain/recordQueries'
 import type { FarmRecord, House, HouseProblem } from '../domain/types'
-import { PROBLEM_TAG, formatDate } from './labels'
+import { PROBLEM_TAG, formatDate, relativeDay } from './labels'
 import './RecordForm.css'
 
 /** 첫 화면에서 고르는 종류. 수확은 고른 뒤 "시작 / 완료 / 수확량"을 한 번 더 고른다 */
@@ -53,9 +53,11 @@ interface Props {
   /** 저장이 끝나면 부른다. message는 목록 화면에 잠깐 띄울 글자 */
   onSaved: (message: string) => void
   onCancel: () => void
+  /** "지난 기록" 버튼을 누르면 부른다 (이력 화면은 App이 연다) */
+  onOpenHistory: () => void
 }
 
-export default function RecordForm({ house, records, today, onSaved, onCancel }: Props) {
+export default function RecordForm({ house, records, today, onSaved, onCancel, onOpenHistory }: Props) {
   const [workDate, setWorkDate] = useState(today)
   const [kind, setKind] = useState<Kind | null>(null)
   const [pesticide, setPesticide] = useState('')
@@ -81,7 +83,6 @@ export default function RecordForm({ house, records, today, onSaved, onCancel }:
 
   // 날짜 칸을 비우거나 앞날을 고르면 저장하지 않는다
   const dateOk = workDate !== '' && workDate <= today
-  const daysAgo = dateOk ? daysBetween(workDate, today) : null
   const cycle = Number(cycleDays)
   const boxCount = Number(boxes)
   const bunchCount = Number(bunches)
@@ -150,12 +151,17 @@ export default function RecordForm({ house, records, today, onSaved, onCancel }:
 
   return (
     <main className="record-form">
-      <button type="button" className="back" onClick={onCancel}>
-        ‹ 목록
-      </button>
+      <div className="top-bar">
+        <button type="button" className="text-button" onClick={onCancel}>
+          ‹ 목록
+        </button>
+        <button type="button" className="text-button" onClick={onOpenHistory}>
+          지난 기록 ›
+        </button>
+      </div>
 
-      <header className="record-form-header">
-        <p className="zone-name">{house.zone}</p>
+      <header className="page-header">
+        <p>{house.zone}</p>
         <h1>{house.no}동 기록</h1>
       </header>
 
@@ -163,9 +169,7 @@ export default function RecordForm({ house, records, today, onSaved, onCancel }:
         <section className="form-card date-card">
           <label className="field-label" htmlFor="work-date">
             날짜
-            {daysAgo !== null && (
-              <span className="field-hint"> {daysAgo === 0 ? '오늘' : daysAgo === 1 ? '어제' : `${daysAgo}일 전`}</span>
-            )}
+            {dateOk && <span className="field-hint"> {relativeDay(workDate, today)}</span>}
           </label>
           <input
             id="work-date"

@@ -1,5 +1,6 @@
 // 여러 화면에서 같이 쓰는 표시용 글자.
 
+import { daysBetween } from '../domain/harvestCalc'
 import type { HouseProblem } from '../domain/types'
 
 // 문제 표시. 아이콘만으로는 뜻을 알기 어려워 글자를 함께 쓴다
@@ -15,4 +16,12 @@ export function formatDate(date: string): string {
   const [, m, d] = date.split('-').map(Number)
   const weekday = WEEKDAYS[new Date(`${date}T00:00:00Z`).getUTCDay()]
   return `${m}월 ${d}일 (${weekday})`
+}
+
+/** date가 오늘로부터 며칠 전인지 글자로: "오늘", "어제", "3일 전" */
+export function relativeDay(date: string, today: string): string {
+  const days = daysBetween(date, today)
+  if (days === 0) return '오늘'
+  if (days === 1) return '어제'
+  return `${days}일 전`
 }

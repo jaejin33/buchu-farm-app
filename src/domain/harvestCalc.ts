@@ -80,7 +80,7 @@ export function activeRecords(records: readonly FarmRecord[]): FarmRecord[] {
 // ---- 마지막 기록 ----
 
 /** a가 b보다 나중 기록인가. 작업 날짜가 늦은 쪽, 같은 날이면 나중에 입력한 쪽 */
-function isLater(a: FarmRecord, b: FarmRecord): boolean {
+export function isLater(a: FarmRecord, b: FarmRecord): boolean {
   if (a.work_date !== b.work_date) return a.work_date > b.work_date
   return Date.parse(a.recorded_at) > Date.parse(b.recorded_at)
 }

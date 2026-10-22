@@ -5,37 +5,7 @@
   padding: 0.6rem 0.8rem 0;
 }
 
-/* ---- 머리 ---- */
-
-.back {
-  min-height: 2.6rem;
-  padding: 0 0.4rem;
-  border: 0;
-  background: none;
-  color: var(--text-sub);
-  font: inherit;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.record-form-header {
-  padding: 0.2rem 0.4rem 0;
-}
-
-.zone-name {
-  margin: 0;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.record-form-header h1 {
-  margin: 0.1rem 0 0;
-  font-size: 1.4rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-}
+/* 머리(‹ 목록, 제목)는 이력 화면과 같이 쓰므로 index.css에 있다 */
 
 /* ---- 카드 ---- */
 

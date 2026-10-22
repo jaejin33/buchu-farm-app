@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { latestHarvestAmount, pesticideNames } from './recordQueries'
+import { houseHistory, latestHarvestAmount, pesticideNames } from './recordQueries'
 import type { CancelRecord, FarmRecord, HarvestAmountRecord, HarvestRecord, SprayRecord } from './types'
 
 // ---- 테스트용 기록 만들기 ----
@@ -98,5 +98,60 @@ describe('latestHarvestAmount', () => {
       amount('a', 'h1', '2026-09-11T07:00:00+09:00', 3),
     ]
     expect(latestHarvestAmount(records, 'h2')).toBeNull()
+  })
+})
+
+// ---- 이력 ----
+
+describe('houseHistory', () => {
+  const ids = (records: FarmRecord[]) => houseHistory(records, 1).map((r) => r.id)
+
+  it('그 동의 기록만, 작업 날짜가 늦은 순으로', () => {
+    const records = [
+      spray('a', '2026-10-01', '가약'),
+      harvest('b', '2026-10-10'),
+      { ...spray('other', '2026-10-15', '가약'), house_no: 2 },
+      spray('c', '2026-10-05', null),
+    ]
+    expect(ids(records)).toEqual(['b', 'c', 'a'])
+  })
+
+  it('같은 날이면 나중에 입력한 기록이 앞', () => {
+    const early = { ...spray('a', '2026-10-10', '가약'), recorded_at: '2026-10-10T08:00:00+09:00' }
+    const late = { ...harvest('b', '2026-10-10'), recorded_at: '2026-10-10T17:00:00+09:00' }
+    expect(ids([early, late])).toEqual(['b', 'a'])
+  })
+
+  it('취소된 기록과 cancel 기록은 보이지 않는다', () => {
+    const records: FarmRecord[] = [spray('a', '2026-10-01', '가약'), spray('b', '2026-10-02', '나약'), cancel('c', 'b')]
+    expect(ids(records)).toEqual(['a'])
+  })
+
+  it('수확량은 수확마다 가장 나중에 입력한 것 하나만 보인다', () => {
+    const records = [
+      harvest('h', '2026-10-20'),
+      amount('a1', 'h', '2026-10-21T07:00:00+09:00', 3),
+      amount('a2', 'h', '2026-10-21T09:00:00+09:00', 5),
+    ]
+    expect(ids(records)).toEqual(['a2', 'h'])
+  })
+
+  it('나중 수확량을 취소하면 그 전 수확량이 다시 보인다', () => {
+    const records: FarmRecord[] = [
+      harvest('h', '2026-10-20'),
+      amount('a1', 'h', '2026-10-21T07:00:00+09:00', 3),
+      amount('a2', 'h', '2026-10-21T09:00:00+09:00', 5),
+      cancel('c', 'a2'),
+    ]
+    expect(ids(records)).toEqual(['a1', 'h'])
+  })
+
+  it('수확 완료 기록을 취소하면 그 수확량도 보이지 않는다', () => {
+    const records: FarmRecord[] = [
+      harvest('h', '2026-10-20'),
+      amount('a', 'h', '2026-10-21T07:00:00+09:00', 3),
+      cancel('c', 'h'),
+    ]
+    expect(ids(records)).toEqual([])
   })
 })

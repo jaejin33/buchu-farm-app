@@ -1,7 +1,7 @@
-// 기록 입력 화면에 필요한 값을 기록에서 뽑는 순수 함수.
+// 기록 입력·이력 화면에 필요한 값을 기록에서 뽑는 순수 함수.
 // 취소된 기록은 harvestCalc의 activeRecords로 걸러 낸 뒤 계산한다.
 
-import { activeRecords } from './harvestCalc'
+import { activeRecords, isLater } from './harvestCalc'
 import type { FarmRecord, HarvestAmountRecord } from './types'
 
 /**
@@ -37,4 +37,16 @@ export function latestHarvestAmount(records: readonly FarmRecord[], harvestId: s
     if (latest === null || Date.parse(r.recorded_at) > Date.parse(latest.recorded_at)) latest = r
   }
   return latest
+}
+
+/**
+ * 이력 화면에 보여줄 houseNo 동의 기록. 최근 기록이 앞 (작업 날짜가 늦은 순, 같은 날이면 나중에 입력한 순).
+ * - 취소된 기록과 cancel 기록 자체는 뺀다 (화면에서는 취소된 기록을 숨긴다)
+ * - 수확량은 수확마다 계산에 쓰는 것(가장 나중에 입력한 것) 하나만 남긴다. 수확 완료 기록이 취소됐으면 뺀다
+ */
+export function houseHistory(records: readonly FarmRecord[], houseNo: number): FarmRecord[] {
+  return activeRecords(records)
+    .filter((r) => r.house_no === houseNo)
+    .filter((r) => r.type !== 'harvest_amount' || latestHarvestAmount(records, r.target_id)?.id === r.id)
+    .sort((a, b) => (isLater(a, b) ? -1 : isLater(b, a) ? 1 : 0))
 }

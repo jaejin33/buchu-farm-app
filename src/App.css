@@ -1,4 +1,4 @@
-/* 저장 알림: 화면 아래 가운데에 잠깐 떴다가 사라진다 */
+/* 알림: 화면 아래 가운데에 잠깐 떴다가 사라진다 */
 .toast {
   position: fixed;
   right: 1rem;
@@ -13,4 +13,5 @@
   font-size: 0.9rem;
   font-weight: 600;
   text-align: center;
+  pointer-events: none; /* 알림 아래에 있는 버튼도 누를 수 있게, 알림은 누르기를 받지 않는다 */
 }

@@ -1,4 +1,21 @@
-// 기록 타입. 필드 이름은 Supabase `records` 테이블 컬럼과 같게 맞춘다.
+// 하우스와 기록 타입.
+
+// ---- 하우스 ----
+
+/** 하우스 문제. 정도는 재지 않고 "있다/없다"만 둔다 */
+export type HouseProblem =
+  | 'drainage' // 💧 배수가 안 됨
+  | 'mycelium' // 🍄 버섯균사가 많음
+
+export interface House {
+  no: number // 동 번호 (1~25)
+  zone: string // 구역 이름
+  crop: string // 작물. 지금은 모두 부추지만 다른 작물을 심을 수 있어 항목으로 둔다
+  problems: HouseProblem[] // 문제가 없으면 빈 배열
+}
+
+// ---- 기록 ----
+// 필드 이름은 Supabase `records` 테이블 컬럼과 같게 맞춘다.
 // 타입 이름을 `Record` 대신 `FarmRecord`로 한 이유: TypeScript에 내장된 `Record<K, V>` 타입과 이름이 겹치기 때문이다.
 
 export type RecordType = 'spray' | 'top_dressing' | 'fertigation' | 'harvest' | 'cancel'

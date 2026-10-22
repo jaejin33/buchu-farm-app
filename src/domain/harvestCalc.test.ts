@@ -4,6 +4,7 @@ import {
   addDays,
   daysBetween,
   getHouseStatus,
+  harvestableDate,
   nextHarvestDate,
   sprayClearDate,
 } from './harvestCalc'
@@ -256,5 +257,37 @@ describe('getHouseStatus', () => {
     const records = [harvest('h', 1, '2026-09-21')] // 35일이면 10-26, 30일이면 10-21
     expect(getHouseStatus(records, 1, today).kind).toBe('growing')
     expect(getHouseStatus(records, 1, today, 30).kind).toBe('ready')
+  })
+})
+
+// ---- 벨 수 있는 날 (정렬용) ----
+
+describe('harvestableDate', () => {
+  const today = '2026-10-21'
+
+  it('약 기록이 없으면 다음 수확 예정일', () => {
+    const status = getHouseStatus([harvest('h', 1, '2026-10-01')], 1, today)
+    expect(harvestableDate(status)).toBe('2026-11-05')
+  })
+
+  it('약 때문에 벨 수 있는 날이 더 늦으면 그날', () => {
+    const records = [harvest('h', 1, '2026-09-10'), spray('a', 1, '2026-10-18', 7)] // 수확 예정 10-15, 약 10-25
+    expect(harvestableDate(getHouseStatus(records, 1, today))).toBe('2026-10-25')
+  })
+
+  it('다음 수확 예정일이 더 늦으면 그날', () => {
+    const records = [harvest('h', 1, '2026-10-10'), spray('a', 1, '2026-10-18', 7)] // 수확 예정 11-14, 약 10-25
+    expect(harvestableDate(getHouseStatus(records, 1, today))).toBe('2026-11-14')
+  })
+
+  it('수확 가능(🟢)이면 이미 지난 날짜가 나온다', () => {
+    const status = getHouseStatus([harvest('h', 1, '2026-09-01')], 1, today)
+    expect(status.kind).toBe('ready')
+    expect(harvestableDate(status)).toBe('2026-10-06')
+  })
+
+  it('수확 기록이 없으면 약 기록이 있어도 null', () => {
+    expect(harvestableDate(getHouseStatus([], 1, today))).toBeNull()
+    expect(harvestableDate(getHouseStatus([spray('a', 1, '2026-10-18', 7)], 1, today))).toBeNull()
   })
 })

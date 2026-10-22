@@ -1,0 +1,110 @@
+/* 크기는 모두 rem(기준 글자 크기의 배수)으로 적는다.
+   index.css의 기준 크기 하나만 바꾸면 글자·여백·카드 폭이 같은 비율로 커지고 작아진다 */
+
+.house-list {
+  padding: 1rem 1rem 2rem;
+}
+
+.house-list-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.house-list-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.today {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.notice {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  background: var(--notice-bg);
+  font-size: 0.9375rem;
+}
+
+.zone h2 {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 1.125rem;
+  color: var(--text-muted);
+}
+
+/* 기준 크기 16px, 360px 폭 폰에서 한 줄에 3장. 기준 크기를 키우면 한 줄에 2장으로 자연히 줄어든다 */
+.house-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 상태는 색만으로 구분하지 않는다. 햇빛 아래나 색약이어도 글자로 읽을 수 있게 라벨을 함께 둔다 */
+.house-card {
+  padding: 0.625rem 0.5rem 0.75rem 0.625rem;
+  border: 1px solid var(--border);
+  border-left-width: 6px;
+  border-radius: 10px;
+  background: var(--card-bg);
+}
+
+.status-spray_wait {
+  border-left-color: var(--red);
+  background: var(--red-bg);
+}
+.status-growing {
+  border-left-color: var(--yellow);
+  background: var(--yellow-bg);
+}
+.status-ready {
+  border-left-color: var(--green);
+  background: var(--green-bg);
+}
+.status-no_record {
+  border-left-color: var(--gray);
+}
+
+/* 번호 옆에 문제 아이콘. 자리가 모자라면 겹치지 않고 아래 줄로 내려간다 */
+.house-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.house-no {
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.house-no span {
+  margin-left: 2px;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.house-problems {
+  font-size: 1.0625rem;
+  white-space: nowrap;
+}
+
+.house-status {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  letter-spacing: -0.3px;
+  white-space: nowrap;
+}
+
+.house-dday {
+  font-size: 1.25rem;
+  font-weight: 700;
+}

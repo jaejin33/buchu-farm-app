@@ -136,3 +136,15 @@ export function getHouseStatus(
   }
   return { kind: 'ready', daysLeft: null, ...base }
 }
+
+/**
+ * 벨 수 있는 날 = 약 때문에 벨 수 있는 날과 다음 수확 예정일 중 늦은 날. 하우스 목록 정렬에 쓴다.
+ * 수확 기록이 없으면 자랐는지 알 수 없으므로 null이다 (약 기록이 있어도 마찬가지).
+ * 이미 지난 날짜일 수 있다 (🟢 수확 가능).
+ */
+export function harvestableDate(status: HouseStatus): string | null {
+  const { sprayClearDate: clear, nextHarvestDate: next } = status
+  if (next === null) return null
+  if (clear !== null && clear > next) return clear
+  return next
+}

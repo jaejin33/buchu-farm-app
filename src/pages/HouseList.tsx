@@ -1,13 +1,14 @@
-// 하우스 목록 화면. 25동을 구역별로 묶어 수확 후·약 후 경과 일수와 🟢 수확 가능을 보여준다.
+// 하우스 목록 화면. 25동을 구역별 카드로 묶고, 한 줄에 한 동씩 수확 후·약 후 경과 일수와 수확 가능 배지를 보여준다.
 // 기록과 "오늘"은 props로 받는다. 이 화면은 기록이 어디서 오는지(가짜 데이터 / IndexedDB) 모른다.
 
 import { getHouseStatus } from '../domain/harvestCalc'
 import type { FarmRecord, House, HouseProblem } from '../domain/types'
 import './HouseList.css'
 
-const PROBLEM_ICON: Record<HouseProblem, { icon: string; label: string }> = {
-  drainage: { icon: '💧', label: '배수 문제' },
-  mycelium: { icon: '🍄', label: '균사 문제' },
+// 문제 표시. 아이콘만으로는 뜻을 알기 어려워 글자를 함께 쓴다
+const PROBLEM_TAG: Record<HouseProblem, { icon: string; label: string }> = {
+  drainage: { icon: '💧', label: '배수 불량' },
+  mycelium: { icon: '🍄', label: '균사 많음' },
 }
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
@@ -19,13 +20,13 @@ function formatToday(date: string): string {
   return `${m}월 ${d}일 (${weekday})`
 }
 
-/** 경과 일수 한 줄. 0일이면 "오늘 수확"처럼 쓴다 */
-function ElapsedLine({ label, days }: { label: string; days: number }) {
-  if (days === 0) return <div className="house-elapsed">오늘 {label}</div>
+/** 경과 일수 글자. 0일이면 "오늘 수확"처럼 쓴다. 숫자는 strong으로 강조 */
+function Elapsed({ label, days }: { label: string; days: number }) {
+  if (days === 0) return <>오늘 {label}</>
   return (
-    <div className="house-elapsed">
+    <>
       {label} 후 <strong>{days}</strong>일
-    </div>
+    </>
   )
 }
 
@@ -54,8 +55,8 @@ export default function HouseList({ houses, records, today }: Props) {
   return (
     <main className="house-list">
       <header className="house-list-header">
-        <h1>부추 하우스</h1>
         <p className="today">{formatToday(today)}</p>
+        <h1>부추 하우스</h1>
       </header>
 
       <p className="notice">약 친 뒤 수확은 농약 포장 표기를 확인하세요</p>
@@ -63,30 +64,39 @@ export default function HouseList({ houses, records, today }: Props) {
       {zones.map((zone) => (
         <section key={zone} className="zone">
           <h2>{zone}</h2>
-          <ul className="house-grid">
+          <ul className="house-rows">
             {rows
               .filter((row) => row.house.zone === zone)
               .map(({ house, status }) => (
-                <li key={house.no} className={`house-card status-${status.kind}`}>
-                  <div className="house-top">
-                    <div className="house-no">
-                      {house.no}
-                      <span>동</span>
-                    </div>
-                    {house.problems.length > 0 && (
-                      <div className="house-problems">
-                        {house.problems.map((p) => (
-                          <span key={p} role="img" aria-label={PROBLEM_ICON[p].label} title={PROBLEM_ICON[p].label}>
-                            {PROBLEM_ICON[p].icon}
-                          </span>
-                        ))}
-                      </div>
+                <li key={house.no} className="house-row">
+                  <span className="house-no">
+                    {house.no}
+                    <small>동</small>
+                  </span>
+                  <div>
+                    {status.daysSinceHarvest !== null ? (
+                      <p className="house-main">
+                        <Elapsed label="수확" days={status.daysSinceHarvest} />
+                      </p>
+                    ) : (
+                      <p className="house-main is-empty">수확 기록 없음</p>
+                    )}
+                    {status.daysSinceSpray !== null && (
+                      <p className="house-sub">
+                        <Elapsed label="약" days={status.daysSinceSpray} />
+                      </p>
                     )}
                   </div>
-                  {status.kind === 'ready' && <div className="house-badge">🟢 수확 가능</div>}
-                  {status.kind === 'no_record' && <div className="house-badge">⚪ 수확 기록 없음</div>}
-                  {status.daysSinceHarvest !== null && <ElapsedLine label="수확" days={status.daysSinceHarvest} />}
-                  {status.daysSinceSpray !== null && <ElapsedLine label="약" days={status.daysSinceSpray} />}
+                  {status.kind === 'ready' && <span className="badge badge-ready">수확 가능</span>}
+                  {house.problems.length > 0 && (
+                    <div className="house-tags">
+                      {house.problems.map((p) => (
+                        <span key={p} className="badge badge-problem">
+                          <span aria-hidden="true">{PROBLEM_TAG[p].icon}</span> {PROBLEM_TAG[p].label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </li>
               ))}
           </ul>

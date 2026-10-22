@@ -1,112 +1,140 @@
 /* 크기는 모두 rem(기준 글자 크기의 배수)으로 적는다.
-   index.css의 기준 크기 하나만 바꾸면 글자·여백·카드 폭이 같은 비율로 커지고 작아진다 */
+   index.css의 기준 크기 하나만 바꾸면 글자·여백이 같은 비율로 커지고 작아진다 */
 
 .house-list {
-  padding: 1rem 1rem 2rem;
+  padding: 1.25rem 0.8rem 2rem;
 }
+
+/* ---- 머리 ---- */
 
 .house-list-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.house-list-header h1 {
-  margin: 0;
-  font-size: 1.25rem;
-  white-space: nowrap;
+  padding: 0.4rem 0.4rem 0;
 }
 
 .today {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  white-space: nowrap;
-}
-
-.notice {
-  margin: 0.5rem 0 0;
-  padding: 0.5rem 0.75rem;
-  border-radius: 8px;
-  background: var(--notice-bg);
-  font-size: 0.9375rem;
-}
-
-.zone h2 {
-  margin: 1.25rem 0 0.5rem;
-  font-size: 1.125rem;
   color: var(--text-muted);
 }
 
-/* 기준 크기 20px, 360~412px 폭 폰에서 한 줄에 2장 */
-.house-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
-  gap: 0.5rem;
+.house-list-header h1 {
+  margin: 0.15rem 0 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.notice {
+  margin: 0.9rem 0 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text-sub);
+  font-size: 0.8rem;
+}
+
+/* ---- 구역 카드 ---- */
+
+.zone {
+  margin-top: 0.75rem;
+  padding: 1rem 0.9rem 0.3rem;
+  border-radius: 20px;
+  background: var(--surface);
+}
+
+.zone h2 {
+  margin: 0 0 0.2rem;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.house-rows {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-/* 상태는 색만으로 구분하지 않는다. 햇빛 아래나 색약이어도 글자로 읽을 수 있게 라벨을 함께 둔다 */
-.house-card {
-  padding: 0.625rem 0.5rem 0.75rem 0.625rem;
-  border: 1px solid var(--border);
-  border-left-width: 6px;
-  border-radius: 10px;
-  background: var(--card-bg);
+/* ---- 하우스 한 줄 ----
+   [동 번호] [수확 후 N일 / 약 후 N일] [수확 가능 배지]
+             [💧 배수 불량] [🍄 균사 많음]   ← 문제가 있을 때만, 둘째 줄 */
+
+.house-row {
+  display: grid;
+  grid-template-columns: 2.8rem 1fr auto;
+  align-items: center;
+  gap: 0.4rem 0.5rem;
+  padding: 0.8rem 0;
 }
 
-.status-growing {
-  border-left-color: var(--border);
-}
-.status-ready {
-  border-left-color: var(--green);
-  background: var(--green-bg);
-}
-.status-no_record {
-  border-left-color: var(--gray);
-}
-
-/* 번호 옆에 문제 아이콘. 자리가 모자라면 겹치지 않고 아래 줄로 내려간다 */
-.house-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
+.house-row + .house-row {
+  border-top: 1px solid var(--line);
 }
 
 .house-no {
-  font-size: 1.875rem;
+  font-size: 1.3rem;
   font-weight: 700;
-  line-height: 1.1;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
 }
 
-.house-no span {
-  margin-left: 2px;
+.house-no small {
+  margin-left: 1px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-sub);
+}
+
+/* 문제 배지는 동 번호 칸을 빼고 그 줄 아래쪽에 넓게 놓는다 (grid-column: 2번째 칸부터 끝까지) */
+.house-tags {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+/* "수확 후 40일"이 두 줄로 갈라지지 않게 한다 */
+.house-main {
+  margin: 0;
   font-size: 1rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.house-main strong {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.house-main.is-empty {
+  color: var(--text-muted);
   font-weight: 500;
 }
 
-.house-problems {
-  font-size: 1.0625rem;
+.house-sub {
+  margin: 0.1rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-sub);
+}
+
+/* 알약 모양 배지. 색만으로 구분하지 않고 글자("수확 가능")를 함께 쓴다 */
+.badge {
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
   white-space: nowrap;
 }
 
-/* 좁은 폰에서 "수확 기록 없음"이 카드 밖으로 나가지 않게 줄바꿈을 허용한다 */
-.house-badge {
-  margin-top: 0.25rem;
-  font-size: 0.875rem;
+.badge-ready {
+  background: var(--primary-weak);
+  color: var(--primary-strong);
+}
+
+/* 문제 배지: 수확 가능(초록)과 헷갈리지 않게 옅은 주황 */
+.badge-problem {
+  background: var(--warn-weak);
+  color: var(--warn-strong);
   font-weight: 600;
-}
-
-.house-elapsed {
-  margin-top: 0.125rem;
-  font-size: 0.875rem;
-  white-space: nowrap;
-}
-
-.house-elapsed strong {
-  font-size: 1.25rem;
 }

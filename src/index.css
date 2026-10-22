@@ -1,18 +1,22 @@
-/* 앱 전체 기본 스타일. 하우스 안 햇빛 아래에서 보므로 밝은 화면 하나만 쓴다 */
+/* 앱 전체 기본 스타일. 하우스 안 햇빛 아래에서 보므로 밝은 화면 하나만 쓴다.
+   연회색 바탕 위에 둥근 흰 카드를 올리는 단순한 모양. 주 색은 초록 */
 :root {
-  --text: #1a1a1a;
-  --text-muted: #555;
-  --bg: #f6f6f3;
-  --card-bg: #fff;
-  --border: #d9d9d4;
-  --notice-bg: #fff4d6;
+  --bg: #f2f4f6; /* 바탕 */
+  --surface: #ffffff; /* 카드 */
+  --text: #191f28; /* 본문 */
+  --text-sub: #4e5968; /* 보조 글자 (작은 글자도 읽히도록 너무 옅지 않게) */
+  --text-muted: #8b95a1; /* 날짜 같은 덜 중요한 글자 */
+  --line: #eef0f3; /* 카드 안 구분선 */
 
-  --green: #2e7d32;
-  --green-bg: #e8f5e9;
-  --gray: #9e9e9e;
+  --primary: #12a150; /* 주 색 (초록). 3단계 저장 버튼 등에 쓴다 */
+  --primary-strong: #0b7a3b; /* 옅은 초록 바탕 위 글자 */
+  --primary-weak: #e3f6ea; /* 옅은 초록 바탕 */
+  --warn-strong: #9a5200; /* 문제 배지 글자 (주황) */
+  --warn-weak: #fff1e0; /* 문제 배지 바탕 */
 
   /* 기준 글자 크기. 화면 전체 크기는 이 숫자 하나로 조정한다. 아버지 기준으로 크게 (5.5단계에서 직접 보여드린 뒤 다시 조정) */
-  font: 20px/1.4 system-ui, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  font: 20px/1.45 system-ui, -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  letter-spacing: -0.01em;
   color-scheme: light;
   color: var(--text);
   background: var(--bg);

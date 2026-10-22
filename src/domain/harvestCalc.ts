@@ -97,6 +97,11 @@ function lastOf<T extends FarmRecord>(
   return last
 }
 
+/** houseNo 동의 마지막 (취소되지 않은) 수확 완료 기록. 없으면 null. 수확량을 이 기록에 붙여 입력한다 */
+export function lastHarvestRecord(records: readonly FarmRecord[], houseNo: number): HarvestRecord | null {
+  return lastOf(records, (r): r is HarvestRecord => r.type === 'harvest' && r.house_no === houseNo)
+}
+
 // ---- 하우스 상태 ----
 
 /**
@@ -112,7 +117,7 @@ function lastOf<T extends FarmRecord>(
  */
 export function getHouseStatus(records: readonly FarmRecord[], houseNo: number, today: string): HouseStatus {
   const start = lastOf(records, (r): r is HarvestStartRecord => r.type === 'harvest_start' && r.house_no === houseNo)
-  const harvest = lastOf(records, (r): r is HarvestRecord => r.type === 'harvest' && r.house_no === houseNo)
+  const harvest = lastHarvestRecord(records, houseNo)
   const spray = lastOf(records, (r): r is SprayRecord => r.type === 'spray' && r.house_no === houseNo)
 
   const base = {

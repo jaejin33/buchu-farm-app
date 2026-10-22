@@ -41,7 +41,7 @@ interface RecordBase {
 /** 약. 앱은 친 지 며칠 됐는지만 센다 (수확 전 일수는 받지 않는다) */
 export interface SprayRecord extends RecordBase {
   type: 'spray'
-  pesticide: string // 약 이름. 지난 약 기록의 이름을 모아 약 목록을 만든다
+  pesticide: string | null // 약 이름. 안 적어도 된다 (null). 지난 약 기록의 이름을 모아 약 목록을 만든다
 }
 
 /** 웃거름 */

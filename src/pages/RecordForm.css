@@ -1,0 +1,245 @@
+/* 기록 입력 화면. 목록 화면과 같은 모양(연회색 바탕 + 둥근 흰 카드)을 쓴다.
+   장갑 낀 손으로 누르므로 버튼은 높이 3rem(기준 20px이면 60px) 이상으로 크게 만든다 */
+
+.record-form {
+  padding: 0.6rem 0.8rem 0;
+}
+
+/* ---- 머리 ---- */
+
+.back {
+  min-height: 2.6rem;
+  padding: 0 0.4rem;
+  border: 0;
+  background: none;
+  color: var(--text-sub);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.record-form-header {
+  padding: 0.2rem 0.4rem 0;
+}
+
+.zone-name {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.record-form-header h1 {
+  margin: 0.1rem 0 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+/* ---- 카드 ---- */
+
+.form-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+  padding: 1rem 0.9rem;
+  border-radius: 20px;
+  background: var(--surface);
+  /* 고른 뒤 나타난 카드로 스크롤할 때, 아래에 붙은 저장 버튼에 가리지 않게 그만큼 띄운다 */
+  scroll-margin-bottom: 6rem;
+}
+
+/* 날짜는 한 줄로: [날짜 오늘] [2026-10-22]. 화면 위쪽을 덜 차지해 아래 내용이 더 보이게 */
+.date-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.4rem 0.8rem;
+}
+
+.date-card .field-error {
+  grid-column: 1 / -1;
+}
+
+.field-label {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.field-hint {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-sub);
+}
+
+.field-note {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-sub);
+}
+
+.field-error {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--warn-strong);
+}
+
+/* ---- 입력 칸 ---- */
+
+.text-input {
+  box-sizing: border-box; /* 너비에 테두리·안쪽 여백까지 포함해 칸이 카드 밖으로 삐져나가지 않게 */
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.5rem 0.8rem;
+  border: 2px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.text-input:focus {
+  border-color: var(--primary);
+  outline: none;
+}
+
+.text-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* ---- 고르는 버튼 ---- */
+
+.choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.choices-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+/* 약 목록: 이름 길이가 제각각이라 줄 맞춤 없이 흘려 놓는다 */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 3rem;
+  padding: 0.4rem 0.8rem;
+  border: 2px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.choice small {
+  font-size: 0.8rem; /* 16px. 화면에서 가장 작은 글자 기준 */
+  font-weight: 500;
+  color: var(--text-sub);
+}
+
+/* 고른 버튼: 초록 테두리 + 옅은 초록 바탕. aria-pressed 값으로 모양을 바꾼다 */
+.choice[aria-pressed='true'] {
+  border-color: var(--primary);
+  background: var(--primary-weak);
+  color: var(--primary-strong);
+}
+
+/* ---- 수확 가능까지 일수: [−] [35] 일 [+] ---- */
+
+.stepper {
+  display: grid;
+  grid-template-columns: 3.2rem 1fr auto 3.2rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stepper .text-input {
+  text-align: center;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.stepper button {
+  height: 3rem;
+  border: 2px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.4rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ---- 수확량: [  ] 박스  [  ] 단 ---- */
+
+.amounts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+}
+
+/* [입력 칸 | 박스]: 칸이 남는 너비를 차지하고, 단위 글자는 줄바꿈하지 않는다 */
+.amounts label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.amounts .text-input {
+  text-align: right;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+/* ---- 저장 ----
+   화면 아래에 붙여 둔다 (sticky). 내용이 길어 스크롤해도 저장 버튼은 항상 보인다 */
+
+.save-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  padding: 0.6rem 0 1rem;
+  background: var(--bg);
+}
+
+.save {
+  min-height: 3.4rem;
+  border: 0;
+  border-radius: 16px;
+  background: var(--primary);
+  color: #fff;
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* 덜 골라서 아직 저장할 수 없을 때 */
+.save:disabled {
+  background: var(--line-strong);
+  color: var(--text-muted);
+  cursor: default;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activeRecords, addDays, daysBetween, getHouseStatus } from './harvestCalc'
+import { activeRecords, addDays, daysBetween, getHouseStatus, lastHarvestRecord } from './harvestCalc'
 import type {
   CancelRecord,
   FarmRecord,
@@ -407,5 +407,28 @@ describe('getHouseStatus: 문제', () => {
   it('문제는 수확 상태에 영향을 주지 않는다', () => {
     const records: FarmRecord[] = [harvest('h', 1, '2026-09-01'), problem('p', 1, '2026-10-01', 'drainage')]
     expect(getHouseStatus(records, 1, today).kind).toBe('ready')
+  })
+})
+
+// ---- 마지막 수확 완료 기록 (수확량 입력에 씀) ----
+
+describe('lastHarvestRecord', () => {
+  it('그 동의 마지막 수확 완료 기록을 돌려준다', () => {
+    const records: FarmRecord[] = [
+      harvest('h1', 1, '2026-09-01'),
+      harvest('h2', 1, '2026-10-10'),
+      harvest('other', 2, '2026-10-20'),
+      harvestStart('s', 1, '2026-10-21'),
+    ]
+    expect(lastHarvestRecord(records, 1)?.id).toBe('h2')
+  })
+
+  it('취소된 수확은 건너뛴다', () => {
+    const records = [harvest('h1', 1, '2026-09-01'), harvest('h2', 1, '2026-10-10'), cancel('c', 1, 'h2')]
+    expect(lastHarvestRecord(records, 1)?.id).toBe('h1')
+  })
+
+  it('수확 완료 기록이 없으면 null', () => {
+    expect(lastHarvestRecord([harvestStart('s', 1, '2026-10-21')], 1)).toBeNull()
   })
 })

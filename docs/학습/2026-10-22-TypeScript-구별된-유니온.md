@@ -79,11 +79,12 @@ interface CancelRecord extends RecordBase {
   type: 'cancel'
   target_id: string
 }
-// 웃거름, 관비도 같은 방식
+// 웃거름, 관비, 수확 시작, 문제도 같은 방식
 
 type FarmRecord =
   | SprayRecord | TopDressingRecord | FertigationRecord
-  | HarvestRecord | HarvestAmountRecord | CancelRecord
+  | HarvestStartRecord | HarvestRecord | HarvestAmountRecord
+  | ProblemRecord | CancelRecord
 ```
 
 `type`을 확인하면 TS가 어떤 종류인지 알아서 좁혀 준다.
@@ -100,7 +101,7 @@ function show(r: FarmRecord) {
 ### 왜 이렇게 하나
 
 - **실행 중에도 남는 값으로 구분하기 위해서.** 0번에서 말했듯 TS 타입은 실행 때 사라진다. 하지만 `type: 'spray'`는 진짜 데이터 값이라 실행 중에도 남는다. IndexedDB나 Supabase에서 읽어 온 평범한 JSON 객체도 `type` 값만 보면 종류를 알 수 있다
-- **DB 테이블과 모양이 같다.** Supabase `records` 테이블은 `type` 컬럼 하나로 여섯 종류를 한 테이블에 담는다. 타입도 같은 구조라 변환 코드가 필요 없다
+- **DB 테이블과 모양이 같다.** Supabase `records` 테이블은 `type` 컬럼 하나로 여덟 종류를 한 테이블에 담는다. 타입도 같은 구조라 변환 코드가 필요 없다
 - **안전.** 수확 기록을 만들 때 `cycle_days`를 빼먹으면 컴파일 에러가 난다. 🟢 수확 가능 계산에 꼭 필요한 값이라 중요하다
 
 ### `harvestCalc.ts`에서 쓴 예: 타입 가드

@@ -92,7 +92,7 @@ HTML·Thymeleaf와 다른 점:
 {rows
   .filter((row) => row.house.zone === zone)
   .map(({ house, status }) => (
-    <li key={house.no} className={`house-card status-${status.kind}`}>
+    <li key={house.no} className="house-row">
       ...
     </li>
   ))}
@@ -101,30 +101,44 @@ HTML·Thymeleaf와 다른 점:
 - `(row) => row.house.zone === zone`은 **화살표 함수**다. Java 람다 `row -> row.house().zone().equals(zone)`과 같다
 - `===`는 JS의 "같다" 비교다. `==`는 타입을 멋대로 바꿔서 비교하므로(`1 == '1'`이 true) 쓰지 않는다
 - `.filter(...).map(...)`은 Java Stream의 `.filter(...).map(...)`과 같다. 다만 `.toList()` 없이 바로 배열이 나온다
-- `key={house.no}`: 반복으로 만든 항목마다 **겹치지 않는 값**을 붙인다. React가 화면을 다시 그릴 때 "어느 카드가 어느 동인지" 알아보는 데 쓴다. 빼먹으면 브라우저 콘솔에 경고가 뜬다. Thymeleaf에는 대응하는 게 없다 (서버가 HTML을 매번 새로 만들기 때문)
-- `` className={`house-card status-${status.kind}`} ``: 백틱 `` ` ``으로 감싼 **템플릿 문자열**이다. `status.kind`가 `'ready'`면 `"house-card status-ready"`가 된다. Thymeleaf의 `th:classappend="'status-' + ${status.kind}"`와 같은 역할이다. CSS에서 `.status-ready`에 초록색을 지정해 두었다
+- `key={house.no}`: 반복으로 만든 항목마다 **겹치지 않는 값**을 붙인다. React가 화면을 다시 그릴 때 "어느 줄이 어느 동인지" 알아보는 데 쓴다. 빼먹으면 브라우저 콘솔에 경고가 뜬다. Thymeleaf에는 대응하는 게 없다 (서버가 HTML을 매번 새로 만들기 때문)
+- `` `${m}월 ${d}일 (${weekday})` `` (`formatToday` 안): 백틱 `` ` ``으로 감싼 **템플릿 문자열**이다. `${...}` 자리에 값이 들어가 `"10월 22일 (목)"`이 된다. Java의 `String.format("%d월 %d일 (%s)", m, d, weekday)`나 Thymeleaf의 `|${m}월 ${d}일|`과 같은 역할이다
 
 ### 조건부 표시: `&&`
 
 ```tsx
-{status.kind === 'ready' && <div className="house-badge">🟢 수확 가능</div>}
-{status.daysSinceSpray !== null && <ElapsedLine label="약" days={status.daysSinceSpray} />}
+{status.kind === 'ready' && <span className="badge badge-ready">수확 가능</span>}
+{status.daysSinceSpray !== null && (
+  <p className="house-sub">
+    <Elapsed label="약" days={status.daysSinceSpray} />
+  </p>
+)}
 ```
 
 `A && B`는 "A가 참이면 B를 그린다"는 뜻이다. 첫 줄은 🟢일 때만, 둘째 줄은 약 기록이 있을 때만 보인다. `th:if="${status.kind == 'ready'}"`와 같다.
 
-`<ElapsedLine ... />`은 같은 파일에 만든 **작은 컴포넌트**다. "수확 후 30일", "약 후 2일"처럼 모양이 같은 줄을 하나로 만들어 두고 props(`label`, `days`)만 바꿔 쓴다. Thymeleaf의 파라미터 있는 프래그먼트와 같다 (`th:replace="~{:: elapsed('약', ${days})}"`).
+`<Elapsed ... />`은 같은 파일에 만든 **작은 컴포넌트**다. "수확 후 30일", "약 후 2일"처럼 모양이 같은 줄을 하나로 만들어 두고 props(`label`, `days`)만 바꿔 쓴다. Thymeleaf의 파라미터 있는 프래그먼트와 같다 (`th:replace="~{:: elapsed('약', ${days})}"`).
+
+둘 중 하나를 그릴 때는 `? :`(삼항 연산자)를 쓴다. Thymeleaf의 `th:if` + `th:unless` 짝과 같다.
+
+```tsx
+{status.daysSinceHarvest !== null ? (
+  <p className="house-main"><Elapsed label="수확" days={status.daysSinceHarvest} /></p>
+) : (
+  <p className="house-main is-empty">수확 기록 없음</p>
+)}
+```
 
 ### 고정된 값 짝 짓기: `Record<K, V>`
 
 ```tsx
-const PROBLEM_ICON: Record<HouseProblem, { icon: string; label: string }> = {
-  drainage: { icon: '💧', label: '배수 문제' },
-  mycelium: { icon: '🍄', label: '균사 문제' },
+const PROBLEM_TAG: Record<HouseProblem, { icon: string; label: string }> = {
+  drainage: { icon: '💧', label: '배수 불량' },
+  mycelium: { icon: '🍄', label: '균사 많음' },
 }
 ```
 
-TypeScript 내장 타입 `Record<K, V>`는 "K의 모든 값마다 V가 하나씩 있는 객체"다. Java의 `EnumMap<HouseProblem, ProblemIcon>`과 같다. 문제 종류를 하나 추가하고 여기에 아이콘을 빠뜨리면 빌드 에러가 난다. (기록 타입 이름을 `Record` 대신 `FarmRecord`로 한 이유가 바로 이 내장 타입과 이름이 겹치기 때문이다 → [[2026-10-22-TypeScript-구별된-유니온]])
+TypeScript 내장 타입 `Record<K, V>`는 "K의 모든 값마다 V가 하나씩 있는 객체"다. Java의 `EnumMap<HouseProblem, ProblemTag>`과 같다. 문제 종류를 하나 추가하고 여기에 배지 글자를 빠뜨리면 빌드 에러가 난다. (기록 타입 이름을 `Record` 대신 `FarmRecord`로 한 이유가 바로 이 내장 타입과 이름이 겹치기 때문이다 → [[2026-10-22-TypeScript-구별된-유니온]])
 
 ### 정렬: 비교 함수
 

@@ -23,6 +23,10 @@ export function makeFakeRecords(today: string): FarmRecord[] {
     }
   }
 
+  const harvestStart = (houseNo: number, daysAgo: number): FarmRecord => ({
+    ...base(houseNo, daysAgo),
+    type: 'harvest_start',
+  })
   const harvest = (houseNo: number, daysAgo: number, cycleDays = DEFAULT_CYCLE_DAYS): FarmRecord => ({
     ...base(houseNo, daysAgo),
     type: 'harvest',
@@ -62,7 +66,7 @@ export function makeFakeRecords(today: string): FarmRecord[] {
   // 오른쪽 주석은 화면에 나와야 하는 내용 (수확 가능까지 기본 35일)
   return [
     harvest(1, 40), // 🟢 수확 후 40일
-    harvest(2, 36), // 🟢 수확 후 36일
+    harvest(2, 36), harvestStart(2, 0), // 수확 중, 오늘 시작
     harvest(3, 33), // 수확 후 33일
     harvest(4, 20), // 수확 후 20일
     yesterdayHarvest, harvestAmount(yesterdayHarvest, 3, 5), // 수확 후 1일
@@ -76,10 +80,10 @@ export function makeFakeRecords(today: string): FarmRecord[] {
     harvest(13, 28), fertigation(13, 10), // 수확 후 28일
     topDressing(14, 20), // ⚪ 수확 기록 없음 (웃거름만 있음)
     harvest(15, 45), spray(15, 10), // 🟢 수확 후 45일, 약 후 10일
-    harvest(16, 0), // 오늘 수확
+    harvestStart(16, 1), harvest(16, 0), // 오늘 수확 (어제 시작해 오늘 완료)
     harvest(17, 38, 40), // 수확 후 38일 (이 동은 40일로 적음 → 아직 🟢 아님)
     harvest(18, 25), spray(18, 5), // 수확 후 25일, 약 후 5일
-    harvest(19, 39), // 🟢 수확 후 39일
+    harvest(19, 39), harvestStart(19, 1), // 수확 중, 시작 후 1일 (어제 시작, 아직 완료 안 함)
     harvest(20, 15), // 수확 후 15일
     harvest(21, 36), spray(21, 1), // 🟢 수확 후 36일, 약 후 1일
     harvest(22, 8), // 수확 후 8일

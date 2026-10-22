@@ -1,4 +1,4 @@
-// 하우스 목록 화면. 25동을 구역별 카드로 묶고, 한 줄에 한 동씩 수확 후·약 후 경과 일수와 수확 가능 배지를 보여준다.
+// 하우스 목록 화면. 25동을 구역별 카드로 묶고, 한 줄에 한 동씩 수확 후·약 후 경과 일수와 수확 중·수확 가능 배지를 보여준다.
 // 기록과 "오늘"은 props로 받는다. 이 화면은 기록이 어디서 오는지(가짜 데이터 / IndexedDB) 모른다.
 
 import { getHouseStatus } from '../domain/harvestCalc'
@@ -39,8 +39,12 @@ interface Props {
 export default function HouseList({ houses, records, today }: Props) {
   const rows = houses.map((house) => ({ house, status: getHouseStatus(records, house.no, today) }))
 
-  // 수확 가능일이 이른 순 (이미 수확 가능한 동은 오래 기다린 동이 앞). 수확 기록이 없는 동은 맨 뒤, 같으면 동 번호 순
+  // 수확 중인 동이 맨 앞. 그다음 수확 가능일이 이른 순 (이미 수확 가능한 동은 오래 기다린 동이 앞).
+  // 수확 기록이 없는 동은 맨 뒤, 같으면 동 번호 순
   rows.sort((a, b) => {
+    const ha = a.status.kind === 'harvesting'
+    const hb = b.status.kind === 'harvesting'
+    if (ha !== hb) return ha ? -1 : 1
     const da = a.status.readyDate
     const db = b.status.readyDate
     if (da === db) return a.house.no - b.house.no
@@ -74,7 +78,11 @@ export default function HouseList({ houses, records, today }: Props) {
                     <small>동</small>
                   </span>
                   <div>
-                    {status.daysSinceHarvest !== null ? (
+                    {status.daysSinceHarvestStart !== null ? (
+                      <p className="house-main">
+                        <Elapsed label="시작" days={status.daysSinceHarvestStart} />
+                      </p>
+                    ) : status.daysSinceHarvest !== null ? (
                       <p className="house-main">
                         <Elapsed label="수확" days={status.daysSinceHarvest} />
                       </p>
@@ -87,6 +95,7 @@ export default function HouseList({ houses, records, today }: Props) {
                       </p>
                     )}
                   </div>
+                  {status.kind === 'harvesting' && <span className="badge badge-harvesting">수확 중</span>}
                   {status.kind === 'ready' && <span className="badge badge-ready">수확 가능</span>}
                   {house.problems.length > 0 && (
                     <div className="house-tags">

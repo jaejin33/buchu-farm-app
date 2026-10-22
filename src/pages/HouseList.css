@@ -132,6 +132,12 @@
   color: var(--primary-strong);
 }
 
+/* 수확 중: 지금 손대고 있는 동이라 진한 초록으로 가장 눈에 띄게. "수확 가능"(옅은 초록)과는 글자로도 구분된다 */
+.badge-harvesting {
+  background: var(--primary-strong);
+  color: #fff;
+}
+
 /* 문제 배지: 수확 가능(초록)과 헷갈리지 않게 옅은 주황 */
 .badge-problem {
   background: var(--warn-weak);

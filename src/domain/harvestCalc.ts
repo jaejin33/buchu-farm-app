@@ -2,16 +2,19 @@
 // "오늘"은 항상 인자로 받는다. 이 파일 안에서는 현재 시각을 읽지 않는다.
 // 앱은 약 때문에 벨 수 있는지 판단하지 않는다 (예외가 많아 사람이 판단한다). 며칠 지났는지만 센다.
 
-import type { FarmRecord, HarvestRecord, SprayRecord } from './types'
+import type { FarmRecord, HarvestRecord, HarvestStartRecord, SprayRecord } from './types'
 
 export type HouseStatusKind =
+  | 'harvesting' // 수확 중 (시작은 했고 아직 완료 안 함)
   | 'ready' // 🟢 수확 가능
   | 'growing' // 자라는 중. 따로 표시하지 않고 경과 일수만 보여준다
   | 'no_record' // ⚪ 수확 기록 없음
 
 export interface HouseStatus {
   kind: HouseStatusKind
-  /** 마지막 수확 후 며칠. 당일은 0. 수확 기록이 없으면 null */
+  /** 수확 중이면 시작 후 며칠. 시작한 날은 0. 수확 중이 아니면 null */
+  daysSinceHarvestStart: number | null
+  /** 마지막 수확 완료 후 며칠. 당일은 0. 수확 완료 기록이 없으면 null */
   daysSinceHarvest: number | null
   /** 마지막 약 후 며칠. 당일은 0. 약 기록이 없으면 null */
   daysSinceSpray: number | null
@@ -92,8 +95,9 @@ function lastOf<T extends FarmRecord>(
 // ---- 하우스 상태 ----
 
 /**
- * 하우스 상태와 경과 일수.
- * - 🟢 수확 가능: 오늘 ≥ 마지막 수확일 + 그 기록의 cycle_days
+ * 하우스 상태와 경과 일수. 우선순위 순서:
+ * - 수확 중: 마지막 수확 시작이 마지막 수확 완료보다 나중 (시작 후 며칠인지, 당일은 0)
+ * - 🟢 수확 가능: 오늘 ≥ 마지막 수확 완료일 + 그 기록의 cycle_days
  * - 자라는 중: 아직 수확 가능일 전
  * - ⚪ 수확 기록 없음: 자랐는지 판단할 근거가 없음 (약·비료 기록만 있어도 여기에 해당)
  * 약 기록은 상태에 영향을 주지 않고 경과 일수만 센다.
@@ -101,18 +105,22 @@ function lastOf<T extends FarmRecord>(
  * records에는 모든 동의 기록을 넣어도 된다. houseNo 동의 기록만 골라 계산한다.
  */
 export function getHouseStatus(records: readonly FarmRecord[], houseNo: number, today: string): HouseStatus {
+  const start = lastOf(records, (r): r is HarvestStartRecord => r.type === 'harvest_start' && r.house_no === houseNo)
   const harvest = lastOf(records, (r): r is HarvestRecord => r.type === 'harvest' && r.house_no === houseNo)
   const spray = lastOf(records, (r): r is SprayRecord => r.type === 'spray' && r.house_no === houseNo)
-  const daysSinceSpray = spray === null ? null : daysBetween(spray.work_date, today)
 
-  if (harvest === null) {
-    return { kind: 'no_record', daysSinceHarvest: null, daysSinceSpray, readyDate: null }
+  const base = {
+    daysSinceHarvest: harvest === null ? null : daysBetween(harvest.work_date, today),
+    daysSinceSpray: spray === null ? null : daysBetween(spray.work_date, today),
+    readyDate: harvest === null ? null : addDays(harvest.work_date, harvest.cycle_days),
   }
-  const readyDate = addDays(harvest.work_date, harvest.cycle_days)
-  return {
-    kind: today >= readyDate ? 'ready' : 'growing',
-    daysSinceHarvest: daysBetween(harvest.work_date, today),
-    daysSinceSpray,
-    readyDate,
+
+  // 시작을 누른 뒤 아직 완료를 안 눌렀으면 수확 중이다. 같은 날 시작·완료면 나중에 입력한 쪽을 따른다
+  if (start !== null && (harvest === null || isLater(start, harvest))) {
+    return { kind: 'harvesting', daysSinceHarvestStart: daysBetween(start.work_date, today), ...base }
   }
+  if (base.readyDate === null) {
+    return { kind: 'no_record', daysSinceHarvestStart: null, ...base }
+  }
+  return { kind: today >= base.readyDate ? 'ready' : 'growing', daysSinceHarvestStart: null, ...base }
 }

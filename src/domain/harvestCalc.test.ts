@@ -6,6 +6,7 @@ import type {
   FertigationRecord,
   HarvestAmountRecord,
   HarvestRecord,
+  HarvestStartRecord,
   SprayRecord,
   TopDressingRecord,
 } from './types'
@@ -20,6 +21,10 @@ function spray(id: string, house_no: number, work_date: string): SprayRecord {
 
 function harvest(id: string, house_no: number, work_date: string, cycle_days = 35): HarvestRecord {
   return { ...common, id, house_no, work_date, type: 'harvest', cycle_days }
+}
+
+function harvestStart(id: string, house_no: number, work_date: string): HarvestStartRecord {
+  return { ...common, id, house_no, work_date, type: 'harvest_start' }
 }
 
 function harvestAmount(id: string, house_no: number, target_id: string): HarvestAmountRecord {
@@ -106,6 +111,7 @@ describe('getHouseStatus', () => {
   it('기록이 하나도 없으면 ⚪ 수확 기록 없음', () => {
     expect(getHouseStatus([], 1, today)).toEqual({
       kind: 'no_record',
+      daysSinceHarvestStart: null,
       daysSinceHarvest: null,
       daysSinceSpray: null,
       readyDate: null,
@@ -120,6 +126,7 @@ describe('getHouseStatus', () => {
     ]
     expect(getHouseStatus(records, 1, today)).toEqual({
       kind: 'no_record',
+      daysSinceHarvestStart: null,
       daysSinceHarvest: null,
       daysSinceSpray: 3,
       readyDate: null,
@@ -129,6 +136,7 @@ describe('getHouseStatus', () => {
   it('수확 가능일 전이면 자라는 중, 수확 후 일수와 수확 가능일', () => {
     expect(getHouseStatus([harvest('h', 1, '2026-10-01')], 1, today)).toEqual({
       kind: 'growing',
+      daysSinceHarvestStart: null,
       daysSinceHarvest: 20,
       daysSinceSpray: null,
       readyDate: '2026-11-05',
@@ -225,10 +233,83 @@ describe('getHouseStatus', () => {
     ]
     expect(getHouseStatus(records, 1, today)).toEqual({
       kind: 'ready',
+      daysSinceHarvestStart: null,
       daysSinceHarvest: 50,
       daysSinceSpray: null,
       readyDate: '2026-10-06',
     })
     expect(getHouseStatus(records, 2, today).kind).toBe('growing')
+  })
+})
+
+// ---- 수확 중 ----
+
+describe('getHouseStatus: 수확 중', () => {
+  const today = '2026-10-21'
+
+  it('수확 시작만 있고 완료가 없으면 수확 중, 시작한 날은 시작 후 0일', () => {
+    expect(getHouseStatus([harvestStart('s', 1, today)], 1, today)).toEqual({
+      kind: 'harvesting',
+      daysSinceHarvestStart: 0,
+      daysSinceHarvest: null,
+      daysSinceSpray: null,
+      readyDate: null,
+    })
+  })
+
+  it('시작 다음 날이면 시작 후 1일', () => {
+    expect(getHouseStatus([harvestStart('s', 1, '2026-10-20')], 1, today).daysSinceHarvestStart).toBe(1)
+  })
+
+  it('수확 중이어도 지난 수확 완료 기준 일수와 약 후 일수는 그대로 센다', () => {
+    const records: FarmRecord[] = [
+      harvest('h1', 1, '2026-09-10'),
+      spray('a', 1, '2026-10-18'),
+      harvestStart('s', 1, '2026-10-20'),
+    ]
+    expect(getHouseStatus(records, 1, today)).toEqual({
+      kind: 'harvesting',
+      daysSinceHarvestStart: 1,
+      daysSinceHarvest: 41,
+      daysSinceSpray: 3,
+      readyDate: '2026-10-15',
+    })
+  })
+
+  it('시작 후 완료하면 수확 중이 끝나고, 완료한 날부터 센다', () => {
+    const records = [harvestStart('s', 1, '2026-10-19'), harvest('h', 1, '2026-10-20')]
+    const status = getHouseStatus(records, 1, today)
+    expect(status.kind).toBe('growing')
+    expect(status.daysSinceHarvestStart).toBeNull()
+    expect(status.daysSinceHarvest).toBe(1)
+    expect(status.readyDate).toBe('2026-11-24') // 10-20 + 35일
+  })
+
+  it('같은 날 시작하고 완료하면 (완료를 나중에 입력) 수확 중이 아니다', () => {
+    const s = { ...harvestStart('s', 1, today), recorded_at: '2026-10-21T08:00:00+09:00' }
+    const h = { ...harvest('h', 1, today), recorded_at: '2026-10-21T17:00:00+09:00' }
+    expect(getHouseStatus([h, s], 1, today).kind).toBe('growing')
+  })
+
+  it('시작 없이 완료만 눌러도 된다 (하루에 끝난 수확)', () => {
+    const status = getHouseStatus([harvest('h', 1, today)], 1, today)
+    expect(status.kind).toBe('growing')
+    expect(status.daysSinceHarvest).toBe(0)
+  })
+
+  it('지난 수확을 완료한 뒤 새로 시작하면 다시 수확 중', () => {
+    const records = [harvestStart('s1', 1, '2026-09-09'), harvest('h1', 1, '2026-09-10'), harvestStart('s2', 1, today)]
+    expect(getHouseStatus(records, 1, today).kind).toBe('harvesting')
+  })
+
+  it('수확 시작 기록을 취소하면 수확 중이 아니다', () => {
+    const records = [harvest('h1', 1, '2026-09-01'), harvestStart('s', 1, today), cancel('c', 1, 's')]
+    expect(getHouseStatus(records, 1, today).kind).toBe('ready')
+  })
+
+  it('다른 동의 수확 시작은 보지 않는다', () => {
+    const records = [harvest('h1', 1, '2026-09-01'), harvestStart('s', 2, today)]
+    expect(getHouseStatus(records, 1, today).kind).toBe('ready')
+    expect(getHouseStatus(records, 2, today).kind).toBe('harvesting')
   })
 })

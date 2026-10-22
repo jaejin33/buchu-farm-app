@@ -18,7 +18,14 @@ export interface House {
 // 필드 이름은 Supabase `records` 테이블 컬럼과 같게 맞춘다.
 // 타입 이름을 `Record` 대신 `FarmRecord`로 한 이유: TypeScript에 내장된 `Record<K, V>` 타입과 이름이 겹치기 때문이다.
 
-export type RecordType = 'spray' | 'top_dressing' | 'fertigation' | 'harvest' | 'harvest_amount' | 'cancel'
+export type RecordType =
+  | 'spray'
+  | 'top_dressing'
+  | 'fertigation'
+  | 'harvest_start'
+  | 'harvest'
+  | 'harvest_amount'
+  | 'cancel'
 
 /** 모든 기록에 공통으로 들어가는 항목 */
 interface RecordBase {
@@ -46,16 +53,24 @@ export interface FertigationRecord extends RecordBase {
   type: 'fertigation'
 }
 
-/** 수확. 수확량은 다음 날 아침에 알기 때문에 여기 넣지 않고 HarvestAmountRecord로 따로 추가한다 */
+/** 수확 시작. 한 동을 하루에 다 못 벨 때 누른다. 다음 수확 완료 기록까지 "수확 중"이다 */
+export interface HarvestStartRecord extends RecordBase {
+  type: 'harvest_start'
+}
+
+/**
+ * 수확 완료. 하루에 끝나면 시작 없이 이것만 남겨도 된다.
+ * 수확량은 다음 날 아침에 알기 때문에 여기 넣지 않고 HarvestAmountRecord로 따로 추가한다
+ */
 export interface HarvestRecord extends RecordBase {
   type: 'harvest'
   cycle_days: number // 수확 가능까지 일수. 입력 당시 값 (기본값 config/farm.ts)
 }
 
-/** 수확량. 수확 다음 날 입력한다. 한 수확에 여러 개면 가장 나중에 입력한 것을 쓴다 */
+/** 수확량. 수확 완료 다음 날, 이번 수확 전체를 한 번에 입력한다. 한 수확에 여러 개면 가장 나중에 입력한 것을 쓴다 */
 export interface HarvestAmountRecord extends RecordBase {
   type: 'harvest_amount'
-  target_id: string // 수확 기록 id
+  target_id: string // 수확 완료 기록 id
   boxes: number // 박스 수
   bunches: number // 단 수. 박스로 환산하지 않고 따로 둔다
 }
@@ -72,6 +87,7 @@ export type FarmRecord =
   | SprayRecord
   | TopDressingRecord
   | FertigationRecord
+  | HarvestStartRecord
   | HarvestRecord
   | HarvestAmountRecord
   | CancelRecord

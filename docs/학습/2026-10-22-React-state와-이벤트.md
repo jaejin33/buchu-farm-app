@@ -55,7 +55,7 @@ const [pesticide, setPesticide] = useState('')
 ### 처음 값을 함수로 주기
 
 ```tsx
-const [houseNo, setHouseNo] = useState(() => houseNoFromHistory(history.state))
+const [screen, setScreen] = useState(() => screenFromHistory(history.state))
 ```
 
 `useState(값)` 대신 `useState(() => 값)`으로 쓰면 **처음 한 번만** 그 함수를 실행한다. 함수 컴포넌트는 다시 그릴 때마다 처음부터 실행되는데, 처음 값 계산은 다시 할 필요가 없어서다. (`() => ...`는 인자 없는 화살표 함수다. Java의 `() -> ...` 람다)
@@ -128,11 +128,13 @@ useEffect(() => {
 
 ```tsx
 useLayoutEffect(() => {
-  window.scrollTo(0, houseNo === null ? listScrollY.current : 0)
-}, [houseNo])
+  window.scrollTo(0, screenKey === 'list' ? listScrollY.current : 0)
+}, [screenKey])
 ```
 
 `useEffect`와 같은데 **화면이 사람 눈에 보이기 직전**에 실행된다. 스크롤을 `useEffect`로 맞추면 맨 위가 한 번 보였다가 내려가는 깜빡임이 생긴다. 화면 위치처럼 "보이기 전에 맞춰야 하는 것"에만 쓴다.
+
+`screenKey`는 지금 화면을 `'list'`, `'form-3'`, `'history-3'` 같은 글자로 바꾼 값이다. 둘째 인자(`[screenKey]`)에 객체 대신 글자를 넣은 이유는 [[2026-10-22-4단계-코드-읽기]] 4번.
 
 ### `useRef`: 기억하지만 다시 그리지는 않는 값
 
@@ -198,7 +200,8 @@ async function handleSubmit(e: FormEvent) {
 ```tsx
 // App.tsx
 <RecordForm onSaved={handleSaved} onCancel={() => history.back()} ... />
-<HouseList onSelectHouse={openHouse} ... />
+<HouseList onSelectHouse={(no) => open({ houseNo: no, view: 'form' })} ... />
+<History onCanceled={setMessage} ... />   // set 함수를 그대로 넘겨도 된다
 
 // RecordForm.tsx 안
 onSaved(`${house.no}동 ${built.label} 저장했어요`)

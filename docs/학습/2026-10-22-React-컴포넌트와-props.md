@@ -57,7 +57,7 @@ export default function HouseList({ houses, records, today, onSelectHouse }: Pro
 부르는 쪽(`App.tsx`)에서는 HTML 속성처럼 넘긴다.
 
 ```tsx
-<HouseList houses={HOUSES} records={records} today={today} onSelectHouse={openHouse} />
+<HouseList houses={HOUSES} records={records} today={today} onSelectHouse={(no) => open({ houseNo: no, view: 'form' })} />
 ```
 
 TypeScript가 `Props`와 비교해 본다. `today`를 빼먹거나 숫자를 넣으면 빌드할 때 에러가 난다. Thymeleaf는 `${today}`가 비어 있어도 실행 중에 조용히 빈칸이 되는데, 이 부분이 다르다.

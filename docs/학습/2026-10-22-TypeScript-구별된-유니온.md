@@ -1,6 +1,6 @@
 # TypeScript 구별된 유니온 (discriminated union)
 
-앱 1단계 `src/domain/types.ts`에서 기록 타입을 만들 때 쓴 방식이다. Java·Spring을 아는 입장에서 정리한다.
+앱 1단계 `src/domain/types.ts`에서 기록 타입을 만들 때 쓴 방식이다. 4번(`DistributiveOmit`)은 3단계 `src/data/recordRepository.ts`에서 썼다. Java·Spring을 아는 입장에서 정리한다.
 
 ## 0. 먼저: TypeScript는 무엇인가
 
@@ -63,7 +63,7 @@ function f(x: string | null) {
 ```ts
 interface SprayRecord extends RecordBase {
   type: 'spray'          // ← 구별용 필드. 값이 'spray'로 고정
-  pesticide: string
+  pesticide: string | null   // 약 이름. 안 적으면 null (3단계에서 바뀜)
 }
 interface HarvestRecord extends RecordBase {
   type: 'harvest'        // ← 'harvest'로 고정
@@ -107,13 +107,17 @@ function show(r: FarmRecord) {
 ### `harvestCalc.ts`에서 쓴 예: 타입 가드
 
 ```ts
-const harvest = lastOf(records, (r): r is HarvestRecord => r.type === 'harvest' && r.house_no === houseNo)
+// lastHarvestRecord 함수 안 (그 동의 마지막 수확 완료 기록)
+return lastOf(records, (r): r is HarvestRecord => r.type === 'harvest' && r.house_no === houseNo)
+
+// getHouseStatus 안
+const spray = lastOf(records, (r): r is SprayRecord => r.type === 'spray' && r.house_no === houseNo)
 ```
 
 `lastOf`는 "조건에 맞는 마지막 기록"을 찾는 함수이고, 두 번째 인자로 **조건 함수**를 받는다 ([[2026-10-22-1단계-코드-읽기]] 3-3).
 
 - `(r) => ...`는 **화살표 함수**다. Java 람다 `r -> ...`와 같다
-- `r is HarvestRecord`는 **타입 가드**다. "이 함수가 true를 돌려주면 r은 HarvestRecord다"라고 TS에 알려 준다. 그래서 결과 `harvest`의 타입이 `FarmRecord`가 아니라 `HarvestRecord`가 되고, 뒤에서 `harvest.cycle_days`를 바로 쓸 수 있다
+- `r is HarvestRecord`는 **타입 가드**다. "이 함수가 true를 돌려주면 r은 HarvestRecord다"라고 TS에 알려 준다. 그래서 찾은 마지막 수확 기록의 타입이 `FarmRecord`가 아니라 `HarvestRecord`가 되고, 뒤에서 `harvest.cycle_days`를 바로 쓸 수 있다
   - Java로 치면 `.filter(r -> r instanceof HarvestRecord).map(r -> (HarvestRecord) r)`의 캐스팅을 한 번에 하는 것
 - 배열의 `.filter()`에도 같은 방식으로 쓴다. Java Stream의 `.filter()`와 같다 (JS 배열에 바로 붙어 있어서 `.stream()`이 필요 없다)
 
@@ -121,7 +125,50 @@ const harvest = lastOf(records, (r): r is HarvestRecord => r.type === 'harvest' 
 
 TS에는 `Record<K, V>`라는 내장 타입이 이미 있다. 키 타입이 K, 값 타입이 V인 객체를 뜻한다 (Java의 `Map<K, V>`와 비슷). 같은 이름을 쓰면 내장 타입을 가려서 헷갈리므로 `FarmRecord`로 했다. [[결정기록]] 참고.
 
-## 4. Spring(Java)에 대응되는 것
+## 4. 종류마다 따로 빼기: `DistributiveOmit`
+
+3단계에서 "새 기록" 타입을 만들 때 쓴 방법이다 (`src/data/recordRepository.ts`).
+
+### 하고 싶은 것
+
+화면은 기록을 저장할 때 동·날짜·종류·내용만 정하고, **id·입력한 사람·입력 시각은 저장소가 채운다.** 그래서 "기록에서 그 셋을 뺀 타입"이 필요하다.
+
+TS에는 항목을 빼는 내장 타입 `Omit<T, 빼는 항목>`이 있다.
+
+```ts
+interface SprayRecord { id: string; house_no: number; type: 'spray'; pesticide: string | null }
+type NewSpray = Omit<SprayRecord, 'id'>
+// = { house_no: number; type: 'spray'; pesticide: string | null }
+```
+
+Java에는 이런 문법이 없다. 굳이 하면 `id` 없는 DTO 클래스(`SprayCreateRequest`)를 따로 만든다.
+
+### 그냥 `Omit`을 유니온에 쓰면 망가진다
+
+```ts
+type Broken = Omit<FarmRecord, 'id' | 'recorded_by' | 'recorded_at'>
+```
+
+`Omit`은 유니온을 **하나로 뭉쳐서** 본다. 여덟 종류 **모두에 있는** 항목(`house_no`, `work_date`, `memo`, `type`)만 남고, `pesticide`, `cycle_days`처럼 일부 종류에만 있는 항목은 사라진다. 그러면 `{ type: 'spray', pesticide: '가약', ... }`을 넘길 때 "`pesticide`라는 항목은 없다"는 에러가 난다. `type`도 "여덟 값 중 아무거나"가 되어 종류별로 좁혀지지 않는다.
+
+### 종류마다 따로 적용하기
+
+```ts
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
+
+export type NewRecord = DistributiveOmit<FarmRecord, 'id' | 'recorded_by' | 'recorded_at'>
+// = Omit<SprayRecord, ...> | Omit<TopDressingRecord, ...> | ... | Omit<CancelRecord, ...>
+```
+
+- `T extends unknown ? X : Y`는 **타입의 삼항 연산자**다. "T가 unknown에 속하면 X, 아니면 Y". 모든 타입은 `unknown`에 속하므로 항상 X(`Omit<T, K>`)다
+- 조건 자체는 의미가 없고, **이 모양을 쓰면 TS가 유니온을 한 종류씩 나눠서 적용한다**는 규칙을 이용한 것이다 (분배 조건부 타입, distributive conditional type). 그래서 결과가 "종류마다 `Omit`한 것들의 유니온"이 된다
+- 그 결과 `NewRecord`도 구별된 유니온이다. `type: 'harvest'`인데 `cycle_days`를 빠뜨리면 여전히 빌드 에러가 난다
+- `K extends PropertyKey`: K는 "객체 항목 이름으로 쓸 수 있는 것"(글자·숫자·심볼)만 받는다는 제약이다. Java 제네릭의 `<K extends Comparable<K>>` 같은 상한 제약과 같은 문법이다
+- `never`는 "아무것도 아닌 타입"이다. 여기서는 쓰일 일이 없는 자리를 채운 것이다
+
+외우지 않아도 된다. **"유니온 타입에서 항목을 뺄 때는 `Omit` 말고 `DistributiveOmit`을 쓴다"**만 기억하면 된다. 많이 쓰는 관용구다.
+
+## 5. Spring(Java)에 대응되는 것
 
 **Java 17+ `sealed interface` + `record` + `switch` 패턴 매칭**이 가장 가깝다.
 
@@ -166,4 +213,5 @@ class HarvestRecordEntity extends FarmRecordEntity { Integer cycleDays; }
 ## 관련
 
 - [[2026-10-22-Vitest-테스트와-순수-함수]]
+- [[2026-10-22-3단계-코드-읽기]]
 - [[진행기록]]

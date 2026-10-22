@@ -107,32 +107,35 @@ HTML·Thymeleaf와 다른 점:
 ### 조건부 표시: `&&`
 
 ```tsx
-{status.daysLeft !== null && <div className="house-dday">D-{status.daysLeft}</div>}
+{status.kind === 'ready' && <div className="house-badge">🟢 수확 가능</div>}
+{status.daysSinceSpray !== null && <ElapsedLine label="약" days={status.daysSinceSpray} />}
 ```
 
-`A && B`는 "A가 참이면 B를 그린다"는 뜻이다. D-n은 🔴 약 대기, 🟡 자라는 중일 때만 값이 있으니 그때만 보인다. `th:if="${status.daysLeft != null}"`와 같다.
+`A && B`는 "A가 참이면 B를 그린다"는 뜻이다. 첫 줄은 🟢일 때만, 둘째 줄은 약 기록이 있을 때만 보인다. `th:if="${status.kind == 'ready'}"`와 같다.
+
+`<ElapsedLine ... />`은 같은 파일에 만든 **작은 컴포넌트**다. "수확 후 30일", "약 후 2일"처럼 모양이 같은 줄을 하나로 만들어 두고 props(`label`, `days`)만 바꿔 쓴다. Thymeleaf의 파라미터 있는 프래그먼트와 같다 (`th:replace="~{:: elapsed('약', ${days})}"`).
 
 ### 고정된 값 짝 짓기: `Record<K, V>`
 
 ```tsx
-const STATUS_LABEL: Record<HouseStatusKind, string> = {
-  spray_wait: '🔴 약 대기',
-  growing: '🟡 자라는 중',
-  ready: '🟢 수확 가능',
-  no_record: '⚪ 기록 없음',
+const PROBLEM_ICON: Record<HouseProblem, { icon: string; label: string }> = {
+  drainage: { icon: '💧', label: '배수 문제' },
+  mycelium: { icon: '🍄', label: '균사 문제' },
 }
 ```
 
-TypeScript 내장 타입 `Record<K, V>`는 "K의 모든 값마다 V가 하나씩 있는 객체"다. Java의 `EnumMap<HouseStatusKind, String>`과 같다. 상태를 하나 추가하고 여기에 라벨을 빠뜨리면 빌드 에러가 난다. (기록 타입 이름을 `Record` 대신 `FarmRecord`로 한 이유가 바로 이 내장 타입과 이름이 겹치기 때문이다 → [[2026-10-22-TypeScript-구별된-유니온]])
+TypeScript 내장 타입 `Record<K, V>`는 "K의 모든 값마다 V가 하나씩 있는 객체"다. Java의 `EnumMap<HouseProblem, ProblemIcon>`과 같다. 문제 종류를 하나 추가하고 여기에 아이콘을 빠뜨리면 빌드 에러가 난다. (기록 타입 이름을 `Record` 대신 `FarmRecord`로 한 이유가 바로 이 내장 타입과 이름이 겹치기 때문이다 → [[2026-10-22-TypeScript-구별된-유니온]])
 
 ### 정렬: 비교 함수
 
 ```tsx
 rows.sort((a, b) => {
-  if (a.date === b.date) return a.house.no - b.house.no
-  if (a.date === null) return 1      // 날짜 모르는 동은 뒤로
-  if (b.date === null) return -1
-  return a.date < b.date ? -1 : 1
+  const da = a.status.readyDate   // 수확 가능일. 수확 기록이 없으면 null
+  const db = b.status.readyDate
+  if (da === db) return a.house.no - b.house.no
+  if (da === null) return 1        // 날짜 모르는 동은 뒤로
+  if (db === null) return -1
+  return da < db ? -1 : 1
 })
 ```
 
@@ -140,7 +143,7 @@ Java의 `Comparator`와 규칙이 같다. 음수면 a가 앞, 양수면 b가 앞
 
 ```java
 rows.sort(Comparator
-    .comparing(Row::date, Comparator.nullsLast(Comparator.naturalOrder()))
+    .comparing((Row r) -> r.status().readyDate(), Comparator.nullsLast(Comparator.naturalOrder()))
     .thenComparingInt(r -> r.house().no()));
 ```
 

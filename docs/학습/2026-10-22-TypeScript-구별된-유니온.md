@@ -64,12 +64,16 @@ function f(x: string | null) {
 interface SprayRecord extends RecordBase {
   type: 'spray'          // ← 구별용 필드. 값이 'spray'로 고정
   pesticide: string
-  phi_days: number
 }
 interface HarvestRecord extends RecordBase {
   type: 'harvest'        // ← 'harvest'로 고정
-  amount: number | null
-  amount_unit: string | null
+  cycle_days: number
+}
+interface HarvestAmountRecord extends RecordBase {
+  type: 'harvest_amount'
+  target_id: string
+  boxes: number
+  bunches: number
 }
 interface CancelRecord extends RecordBase {
   type: 'cancel'
@@ -77,7 +81,9 @@ interface CancelRecord extends RecordBase {
 }
 // 웃거름, 관비도 같은 방식
 
-type FarmRecord = SprayRecord | TopDressingRecord | FertigationRecord | HarvestRecord | CancelRecord
+type FarmRecord =
+  | SprayRecord | TopDressingRecord | FertigationRecord
+  | HarvestRecord | HarvestAmountRecord | CancelRecord
 ```
 
 `type`을 확인하면 TS가 어떤 종류인지 알아서 좁혀 준다.
@@ -85,30 +91,30 @@ type FarmRecord = SprayRecord | TopDressingRecord | FertigationRecord | HarvestR
 ```ts
 function show(r: FarmRecord) {
   if (r.type === 'spray') {
-    r.phi_days     // OK: 여기서 r은 SprayRecord
+    r.pesticide    // OK: 여기서 r은 SprayRecord
   }
-  r.phi_days       // 컴파일 에러: 웃거름 기록일 수도 있음
+  r.pesticide      // 컴파일 에러: 웃거름 기록일 수도 있음
 }
 ```
 
 ### 왜 이렇게 하나
 
 - **실행 중에도 남는 값으로 구분하기 위해서.** 0번에서 말했듯 TS 타입은 실행 때 사라진다. 하지만 `type: 'spray'`는 진짜 데이터 값이라 실행 중에도 남는다. IndexedDB나 Supabase에서 읽어 온 평범한 JSON 객체도 `type` 값만 보면 종류를 알 수 있다
-- **DB 테이블과 모양이 같다.** Supabase `records` 테이블은 `type` 컬럼 하나로 다섯 종류를 한 테이블에 담는다. 타입도 같은 구조라 변환 코드가 필요 없다
-- **안전.** 약 기록을 만들 때 `phi_days`를 빼먹으면 컴파일 에러가 난다. 수확 가능일 계산에 꼭 필요한 값이라 중요하다
+- **DB 테이블과 모양이 같다.** Supabase `records` 테이블은 `type` 컬럼 하나로 여섯 종류를 한 테이블에 담는다. 타입도 같은 구조라 변환 코드가 필요 없다
+- **안전.** 수확 기록을 만들 때 `cycle_days`를 빼먹으면 컴파일 에러가 난다. 🟢 수확 가능 계산에 꼭 필요한 값이라 중요하다
 
 ### `harvestCalc.ts`에서 쓴 예: 타입 가드
 
 ```ts
-const sprays = activeRecords(records).filter(
-  (r): r is SprayRecord => r.type === 'spray' && r.house_no === houseNo,
-)
+const harvest = lastOf(records, (r): r is HarvestRecord => r.type === 'harvest' && r.house_no === houseNo)
 ```
 
+`lastOf`는 "조건에 맞는 마지막 기록"을 찾는 함수이고, 두 번째 인자로 **조건 함수**를 받는다 ([[2026-10-22-1단계-코드-읽기]] 3-3).
+
 - `(r) => ...`는 **화살표 함수**다. Java 람다 `r -> ...`와 같다
-- `.filter()`는 Java Stream의 `.filter()`와 같다 (JS 배열에 바로 붙어 있어서 `.stream()`이 필요 없다)
-- `r is SprayRecord`는 **타입 가드**다. "이 함수가 true를 돌려주면 r은 SprayRecord다"라고 TS에 알려 준다. 그래서 결과 `sprays`의 타입이 `FarmRecord[]`가 아니라 `SprayRecord[]`가 되고, 뒤에서 `s.phi_days`를 바로 쓸 수 있다
-  - Java로 치면 `.filter(r -> r instanceof SprayRecord).map(r -> (SprayRecord) r)`의 캐스팅을 한 번에 하는 것
+- `r is HarvestRecord`는 **타입 가드**다. "이 함수가 true를 돌려주면 r은 HarvestRecord다"라고 TS에 알려 준다. 그래서 결과 `harvest`의 타입이 `FarmRecord`가 아니라 `HarvestRecord`가 되고, 뒤에서 `harvest.cycle_days`를 바로 쓸 수 있다
+  - Java로 치면 `.filter(r -> r instanceof HarvestRecord).map(r -> (HarvestRecord) r)`의 캐스팅을 한 번에 하는 것
+- 배열의 `.filter()`에도 같은 방식으로 쓴다. Java Stream의 `.filter()`와 같다 (JS 배열에 바로 붙어 있어서 `.stream()`이 필요 없다)
 
 ## 3. `Record` 대신 `FarmRecord`라고 부른 이유
 
@@ -120,8 +126,8 @@ TS에는 `Record<K, V>`라는 내장 타입이 이미 있다. 키 타입이 K, �
 
 ```java
 sealed interface FarmRecord permits SprayRecord, HarvestRecord, CancelRecord /* ... */ {}
-record SprayRecord(String id, int houseNo, String pesticide, int phiDays) implements FarmRecord {}
-record HarvestRecord(String id, int houseNo, BigDecimal amount) implements FarmRecord {}
+record SprayRecord(String id, int houseNo, String pesticide) implements FarmRecord {}
+record HarvestRecord(String id, int houseNo, int cycleDays) implements FarmRecord {}
 
 String describe(FarmRecord r) {
   return switch (r) {
@@ -148,10 +154,13 @@ String describe(FarmRecord r) {
 abstract class FarmRecordEntity { ... }
 
 @Entity @DiscriminatorValue("spray")
-class SprayRecordEntity extends FarmRecordEntity { String pesticide; Integer phiDays; }
+class SprayRecordEntity extends FarmRecordEntity { String pesticide; }
+
+@Entity @DiscriminatorValue("harvest")
+class HarvestRecordEntity extends FarmRecordEntity { Integer cycleDays; }
 ```
 
-여러 종류를 한 테이블에 넣고 구분 컬럼(`type`)으로 가른다. Supabase `records` 테이블이 이 구조다. 해당하지 않는 컬럼(웃거름 기록의 `phi_days` 등)은 null로 비어 있다.
+여러 종류를 한 테이블에 넣고 구분 컬럼(`type`)으로 가른다. Supabase `records` 테이블이 이 구조다. 해당하지 않는 컬럼(웃거름 기록의 `cycle_days`, `boxes` 등)은 null로 비어 있다.
 
 ## 관련
 

@@ -1,16 +1,9 @@
-// 하우스 목록 화면. 25동을 구역별로 묶어 상태 색과 D-n을 보여준다.
+// 하우스 목록 화면. 25동을 구역별로 묶어 수확 후·약 후 경과 일수와 🟢 수확 가능을 보여준다.
 // 기록과 "오늘"은 props로 받는다. 이 화면은 기록이 어디서 오는지(가짜 데이터 / IndexedDB) 모른다.
 
-import { getHouseStatus, harvestableDate, type HouseStatusKind } from '../domain/harvestCalc'
+import { getHouseStatus } from '../domain/harvestCalc'
 import type { FarmRecord, House, HouseProblem } from '../domain/types'
 import './HouseList.css'
-
-const STATUS_LABEL: Record<HouseStatusKind, string> = {
-  spray_wait: '🔴 약 대기',
-  growing: '🟡 자라는 중',
-  ready: '🟢 수확 가능',
-  no_record: '⚪ 기록 없음',
-}
 
 const PROBLEM_ICON: Record<HouseProblem, { icon: string; label: string }> = {
   drainage: { icon: '💧', label: '배수 문제' },
@@ -26,6 +19,16 @@ function formatToday(date: string): string {
   return `${m}월 ${d}일 (${weekday})`
 }
 
+/** 경과 일수 한 줄. 0일이면 "오늘 수확"처럼 쓴다 */
+function ElapsedLine({ label, days }: { label: string; days: number }) {
+  if (days === 0) return <div className="house-elapsed">오늘 {label}</div>
+  return (
+    <div className="house-elapsed">
+      {label} 후 <strong>{days}</strong>일
+    </div>
+  )
+}
+
 interface Props {
   houses: readonly House[]
   records: readonly FarmRecord[]
@@ -33,17 +36,16 @@ interface Props {
 }
 
 export default function HouseList({ houses, records, today }: Props) {
-  const rows = houses.map((house) => {
-    const status = getHouseStatus(records, house.no, today)
-    return { house, status, date: harvestableDate(status) }
-  })
+  const rows = houses.map((house) => ({ house, status: getHouseStatus(records, house.no, today) }))
 
-  // 벨 수 있는 날이 가까운 순. 날짜를 모르는 동(수확 기록 없음)은 맨 뒤, 같으면 동 번호 순
+  // 수확 가능일이 이른 순 (이미 수확 가능한 동은 오래 기다린 동이 앞). 수확 기록이 없는 동은 맨 뒤, 같으면 동 번호 순
   rows.sort((a, b) => {
-    if (a.date === b.date) return a.house.no - b.house.no
-    if (a.date === null) return 1
-    if (b.date === null) return -1
-    return a.date < b.date ? -1 : 1
+    const da = a.status.readyDate
+    const db = b.status.readyDate
+    if (da === db) return a.house.no - b.house.no
+    if (da === null) return 1
+    if (db === null) return -1
+    return da < db ? -1 : 1
   })
 
   // 구역 순서는 houses.ts에 적힌 순서를 따른다
@@ -56,7 +58,7 @@ export default function HouseList({ houses, records, today }: Props) {
         <p className="today">{formatToday(today)}</p>
       </header>
 
-      <p className="notice">농약 포장 표기가 우선입니다</p>
+      <p className="notice">약 친 뒤 수확은 농약 포장 표기를 확인하세요</p>
 
       {zones.map((zone) => (
         <section key={zone} className="zone">
@@ -81,8 +83,10 @@ export default function HouseList({ houses, records, today }: Props) {
                       </div>
                     )}
                   </div>
-                  <div className="house-status">{STATUS_LABEL[status.kind]}</div>
-                  {status.daysLeft !== null && <div className="house-dday">D-{status.daysLeft}</div>}
+                  {status.kind === 'ready' && <div className="house-badge">🟢 수확 가능</div>}
+                  {status.kind === 'no_record' && <div className="house-badge">⚪ 수확 기록 없음</div>}
+                  {status.daysSinceHarvest !== null && <ElapsedLine label="수확" days={status.daysSinceHarvest} />}
+                  {status.daysSinceSpray !== null && <ElapsedLine label="약" days={status.daysSinceSpray} />}
                 </li>
               ))}
           </ul>

@@ -1,25 +1,22 @@
-// 수확 가능일 계산. 안전과 관련된 계산이라 순수 함수로만 만들고 모두 테스트한다.
+// 경과 일수와 수확 가능 계산. 순수 함수로만 만들고 모두 테스트한다.
 // "오늘"은 항상 인자로 받는다. 이 파일 안에서는 현재 시각을 읽지 않는다.
+// 앱은 약 때문에 벨 수 있는지 판단하지 않는다 (예외가 많아 사람이 판단한다). 며칠 지났는지만 센다.
 
 import type { FarmRecord, HarvestRecord, SprayRecord } from './types'
 
-/** 수확 주기 기본값 (미확정: 고정 35일인지, 동마다 다른지 확인 필요) */
-export const DEFAULT_HARVEST_CYCLE_DAYS = 35
-
 export type HouseStatusKind =
-  | 'spray_wait' // 🔴 약 대기
-  | 'growing' // 🟡 자라는 중
   | 'ready' // 🟢 수확 가능
-  | 'no_record' // ⚪ 기록 없음
+  | 'growing' // 자라는 중. 따로 표시하지 않고 경과 일수만 보여준다
+  | 'no_record' // ⚪ 수확 기록 없음
 
 export interface HouseStatus {
   kind: HouseStatusKind
-  /** D-n의 n. 약 대기·자라는 중일 때만 값이 있다 */
-  daysLeft: number | null
-  /** 약 때문에 벨 수 있는 날. 약 기록이 없으면 null */
-  sprayClearDate: string | null
-  /** 다음 수확 예정일. 수확 기록이 없으면 null */
-  nextHarvestDate: string | null
+  /** 마지막 수확 후 며칠. 당일은 0. 수확 기록이 없으면 null */
+  daysSinceHarvest: number | null
+  /** 마지막 약 후 며칠. 당일은 0. 약 기록이 없으면 null */
+  daysSinceSpray: number | null
+  /** 수확 가능일 = 마지막 수확일 + 그 기록의 cycle_days. 수확 기록이 없으면 null. 목록 정렬에 쓴다 */
+  readyDate: string | null
 }
 
 // ---- 날짜 계산 ----
@@ -72,79 +69,50 @@ export function activeRecords(records: readonly FarmRecord[]): FarmRecord[] {
   return records.filter((r) => r.type !== 'cancel' && !canceledIds.has(r.id))
 }
 
-// ---- 수확 가능일 ----
-// 날짜가 "YYYY-MM-DD" 형식이라 문자열 크기 비교가 곧 날짜 비교다 ("2026-10-09" < "2026-10-21").
+// ---- 마지막 기록 ----
 
-/** 약 때문에 벨 수 있는 날 = 살아 있는 spray 기록 중 (살포일 + phi_days)가 가장 늦은 날 */
-export function sprayClearDate(records: readonly FarmRecord[], houseNo: number): string | null {
-  const sprays = activeRecords(records).filter(
-    (r): r is SprayRecord => r.type === 'spray' && r.house_no === houseNo,
-  )
-  let latest: string | null = null
-  for (const s of sprays) {
-    const clear = addDays(s.work_date, s.phi_days)
-    if (latest === null || clear > latest) latest = clear
-  }
-  return latest
+/** a가 b보다 나중 기록인가. 작업 날짜가 늦은 쪽, 같은 날이면 나중에 입력한 쪽 */
+function isLater(a: FarmRecord, b: FarmRecord): boolean {
+  if (a.work_date !== b.work_date) return a.work_date > b.work_date
+  return Date.parse(a.recorded_at) > Date.parse(b.recorded_at)
 }
 
-/** 다음 수확 예정일 = 마지막 harvest 기록일 + 수확 주기 일수 */
-export function nextHarvestDate(
+/** 살아 있는 기록 중 isTarget에 맞는 마지막 기록. 없으면 null */
+function lastOf<T extends FarmRecord>(
   records: readonly FarmRecord[],
-  houseNo: number,
-  cycleDays: number = DEFAULT_HARVEST_CYCLE_DAYS,
-): string | null {
-  const harvests = activeRecords(records).filter(
-    (r): r is HarvestRecord => r.type === 'harvest' && r.house_no === houseNo,
-  )
-  let last: string | null = null
-  for (const h of harvests) {
-    if (last === null || h.work_date > last) last = h.work_date
+  isTarget: (r: FarmRecord) => r is T,
+): T | null {
+  let last: T | null = null
+  for (const r of activeRecords(records)) {
+    if (isTarget(r) && (last === null || isLater(r, last))) last = r
   }
-  return last === null ? null : addDays(last, cycleDays)
+  return last
 }
 
 // ---- 하우스 상태 ----
 
 /**
- * 하우스 상태를 우선순위대로 정한다.
- * 1. 🔴 약 대기: 오늘 < 약 때문에 벨 수 있는 날
- * 2. 🟡 자라는 중: 오늘 < 다음 수확 예정일
- * 3. 🟢 수확 가능: 마지막 수확 후 주기가 지났고 약 대기도 아님
- * 4. ⚪ 기록 없음: 수확 기록이 없어 자랐는지 판단할 수 없음 (약·비료 기록만 있어도 여기에 해당)
+ * 하우스 상태와 경과 일수.
+ * - 🟢 수확 가능: 오늘 ≥ 마지막 수확일 + 그 기록의 cycle_days
+ * - 자라는 중: 아직 수확 가능일 전
+ * - ⚪ 수확 기록 없음: 자랐는지 판단할 근거가 없음 (약·비료 기록만 있어도 여기에 해당)
+ * 약 기록은 상태에 영향을 주지 않고 경과 일수만 센다.
  *
  * records에는 모든 동의 기록을 넣어도 된다. houseNo 동의 기록만 골라 계산한다.
  */
-export function getHouseStatus(
-  records: readonly FarmRecord[],
-  houseNo: number,
-  today: string,
-  cycleDays: number = DEFAULT_HARVEST_CYCLE_DAYS,
-): HouseStatus {
-  const clear = sprayClearDate(records, houseNo)
-  const next = nextHarvestDate(records, houseNo, cycleDays)
-  const base = { sprayClearDate: clear, nextHarvestDate: next }
+export function getHouseStatus(records: readonly FarmRecord[], houseNo: number, today: string): HouseStatus {
+  const harvest = lastOf(records, (r): r is HarvestRecord => r.type === 'harvest' && r.house_no === houseNo)
+  const spray = lastOf(records, (r): r is SprayRecord => r.type === 'spray' && r.house_no === houseNo)
+  const daysSinceSpray = spray === null ? null : daysBetween(spray.work_date, today)
 
-  if (clear !== null && today < clear) {
-    return { kind: 'spray_wait', daysLeft: daysBetween(today, clear), ...base }
+  if (harvest === null) {
+    return { kind: 'no_record', daysSinceHarvest: null, daysSinceSpray, readyDate: null }
   }
-  if (next === null) {
-    return { kind: 'no_record', daysLeft: null, ...base }
+  const readyDate = addDays(harvest.work_date, harvest.cycle_days)
+  return {
+    kind: today >= readyDate ? 'ready' : 'growing',
+    daysSinceHarvest: daysBetween(harvest.work_date, today),
+    daysSinceSpray,
+    readyDate,
   }
-  if (today < next) {
-    return { kind: 'growing', daysLeft: daysBetween(today, next), ...base }
-  }
-  return { kind: 'ready', daysLeft: null, ...base }
-}
-
-/**
- * 벨 수 있는 날 = 약 때문에 벨 수 있는 날과 다음 수확 예정일 중 늦은 날. 하우스 목록 정렬에 쓴다.
- * 수확 기록이 없으면 자랐는지 알 수 없으므로 null이다 (약 기록이 있어도 마찬가지).
- * 이미 지난 날짜일 수 있다 (🟢 수확 가능).
- */
-export function harvestableDate(status: HouseStatus): string | null {
-  const { sprayClearDate: clear, nextHarvestDate: next } = status
-  if (next === null) return null
-  if (clear !== null && clear > next) return clear
-  return next
 }

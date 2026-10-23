@@ -85,6 +85,21 @@ git push → Jenkins / GitHub Actions가 ./gradlew build → app.jar
 
 Vercel은 빌드할 때마다 `npm install`부터 하므로 이 문제가 없다. 내 PC에서 다른 PC로 옮기거나, `git pull`로 라이브러리가 늘어난 뒤에는 `npm install`을 한 번 한다.
 
+### 새 PC에서 할 일: 처음 한 번만
+
+Git에 일부러 안 올리는 것이 둘 있어서, PC를 바꾸면 그 PC에서 **처음 한 번** 채워야 한다. 그다음부터 그 PC에서는 `git pull`만 하면 된다.
+
+| Git에 없는 것 | 왜 안 올리나 | 새 PC에서 |
+|---|---|---|
+| `node_modules/` | 파일이 수만 개라 무겁다. `package.json` 목록만 있으면 다시 받을 수 있다 | `npm install` |
+| `.env` (Supabase 주소·키) | 키를 Git에 남기지 않으려고 → [[2026-10-23-환경-변수와-Supabase-권한]] 1번 | `.env.example`을 **복사**해 `.env`를 만들고 값을 채운다 |
+
+- Spring으로 치면 `build.gradle`만 Git에 있고 jar는 PC마다 `~/.gradle/caches`로 받는 것, Git에 안 올리는 `application-local.yml`을 PC마다 만드는 것과 같다
+- **이름 바꾸기가 아니라 복사다.** 10월 23일에 `.env.example`이 지워진 채 `.env`만 남은 적이 있다. 그대로 커밋하면 견본이 Git에서 사라져 다음 PC에서 무엇을 채울지 모른다. `git restore .env.example`로 되살렸다
+- 같은 PC로 돌아왔을 때 `npm install`은 다른 PC에서 라이브러리를 늘렸을 때만 다시 한다. 헷갈리면 그냥 해도 된다 (바뀐 게 없으면 몇 초 만에 끝난다)
+- **폰 앱은 PC의 `.env`와 상관없다.** 폰은 Vercel 주소를 열고, Vercel은 자기 환경 변수로 빌드한다. 그래서 이 PC에 `.env`가 없어도 폰 로그인은 됐다. `.env`는 이 PC에서 `npm run dev`로 띄울 때만 쓴다
+- 기록도 PC와 폰이 따로다. IndexedDB는 기기마다, 주소(origin)마다 따로라서 같은 PC라도 `localhost`와 Vercel 주소의 기록이 다르다 → [[2026-10-22-IndexedDB와-Dexie]] 2번. 동기화(6-4 올리기, 6-5 내려받기)가 끝나면 Supabase를 거쳐 같은 기록을 갖게 된다
+
 ## 5. 아이폰과 갤럭시
 
 아버지는 갤럭시(안드로이드 크롬), 형과 개발자는 아이폰(사파리)이다. **두 폰 모두 실제로 쓰는 폰이라 둘 다 동작해야 한다** → [[결정기록]] "아버지 폰(갤럭시)과 형 폰(아이폰) 모두 지원". 홈 화면 추가 방법과 저장소 차이는 [[2026-10-23-PWA와-서비스-워커]] 4번.

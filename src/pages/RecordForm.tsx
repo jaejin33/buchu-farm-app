@@ -144,14 +144,19 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
     }
   }
 
-  /** 날짜 상자를 누르면 달력을 연다. 투명한 날짜 칸이 직접 눌렸으면 브라우저가 이미 열었으므로 그대로 둔다 */
+  /** 날짜 상자를 누르면 달력을 연다. 폰은 투명한 날짜 칸이 직접 눌렸으면 브라우저가 이미 열었으므로 그대로 둔다.
+      PC(마우스)는 날짜 칸을 눌러도 달력 아이콘이 아니면 안 열려서, 그때도 직접 연다 */
   function openDatePicker(e: MouseEvent<HTMLDivElement>) {
     const input = dateInputRef.current
-    if (input === null || e.target === input) return
+    if (input === null) return
+    const inputClicked = e.target === input
+    if (inputClicked && !window.matchMedia('(pointer: fine)').matches) return
     try {
       input.showPicker() // 달력 열기 (최근 브라우저)
     } catch {
-      // showPicker가 없는 옛 브라우저: 날짜 칸을 누른 것처럼 한다
+      // showPicker가 없는 옛 브라우저: 날짜 칸을 누른 것처럼 한다.
+      // 날짜 칸이 눌린 경우는 하지 않는다. 아래 click()이 다시 여기로 와서 끝없이 반복되기 때문이다
+      if (inputClicked) return
       input.focus()
       input.click()
     }

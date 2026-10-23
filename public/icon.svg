@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- 홈 화면 아이콘 원본. 안드로이드가 동그라미 등으로 잘라도 보이게 잎은 가운데(반지름 205px 안)에 둔다 -->
+  <rect width="512" height="512" fill="#12a150" />
+  <g fill="none" stroke="#fff" stroke-width="28" stroke-linecap="round">
+    <path d="M256 384 C256 300 256 220 256 120" />
+    <path d="M240 384 C230 300 200 225 160 152" />
+    <path d="M272 384 C282 300 312 225 352 152" />
+    <path d="M226 384 C202 322 160 270 112 232" />
+    <path d="M286 384 C310 322 352 270 400 232" />
+  </g>
+  <rect x="160" y="378" width="192" height="28" rx="14" fill="#fff" />
+</svg>

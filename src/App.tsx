@@ -3,6 +3,7 @@ import './App.css'
 import { HOUSES } from './config/houses'
 import { getCurrentUser } from './data/auth'
 import { removeTestRecords, useRecords } from './data/recordRepository'
+import { startSync } from './data/syncService'
 import { todayInKorea } from './domain/today'
 import History from './pages/History'
 import HouseList from './pages/HouseList'
@@ -39,6 +40,12 @@ function App() {
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
+
+  // 로그인되어 있으면 안 보낸 기록을 서버로 올린다: 앱을 열 때(로그인 직후 포함) 한 번, 인터넷이 다시 연결될 때마다
+  useEffect(() => {
+    if (user === null) return
+    return startSync()
+  }, [user])
 
   // 화면이 바뀐 직후(그리기 전) 스크롤을 맞춘다: 목록은 보던 자리, 다른 화면은 맨 위
   const screenKey = screen === null ? 'list' : `${screen.view}-${screen.houseNo}`

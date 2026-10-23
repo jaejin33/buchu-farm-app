@@ -8,6 +8,7 @@ import type { FarmRecord } from '../domain/types'
 import { getCurrentUser } from './auth'
 import { db } from './db'
 import { newId } from './newId'
+import { uploadPending } from './syncService'
 
 /** 로그인을 붙이기 전(5단계까지) 시험 기록에 넣던 임시 입력자 id. 로그인할 때 이 기록들을 지운다 */
 export const LOCAL_USER_ID = '00000000-0000-0000-0000-000000000000'
@@ -19,12 +20,17 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K>
 /** 화면이 넘기는 새 기록. id·입력한 사람·입력 시각은 여기서 채운다 */
 export type NewRecord = DistributiveOmit<FarmRecord, 'id' | 'recorded_by' | 'recorded_at'>
 
-/** 기록을 폰(IndexedDB)에 저장한다. 입력한 사람은 이 폰에서 로그인한 사람이다. 서버로는 아직 안 보낸 상태(synced: 0)로 둔다 */
+/**
+ * 기록을 폰(IndexedDB)에 저장한다. 입력한 사람은 이 폰에서 로그인한 사람이다.
+ * 안 보낸 상태(synced: 0)로 저장한 뒤 바로 서버로 올리기를 시작한다. 올리기는 기다리지 않는다
+ * (인터넷이 느리거나 끊겨도 저장은 바로 끝나고 화면이 넘어가게)
+ */
 export async function addRecord(input: NewRecord): Promise<FarmRecord> {
   const user = getCurrentUser()
   if (user === null) throw new Error('로그인 전에는 기록할 수 없어요')
   const record: FarmRecord = { ...input, id: newId(), recorded_by: user.id, recorded_at: nowTimestamp() }
   await db.records.add({ ...record, synced: 0 })
+  void uploadPending()
   return record
 }
 

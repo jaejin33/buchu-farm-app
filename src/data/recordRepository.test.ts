@@ -5,10 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getCurrentUser } from './auth'
 import { db } from './db'
 import { LOCAL_USER_ID, addRecord, getAllRecords, removeTestRecords } from './recordRepository'
+import { uploadPending } from './syncService'
 
 // 로그인은 진짜 Supabase가 필요해서, "이 폰에서 로그인한 사람"을 돌려주는 함수만 가짜로 바꾼다.
 // vi.mock은 Java의 Mockito.when(...).thenReturn(...)처럼 진짜 대신 정해 둔 값을 돌려주게 한다
 vi.mock('./auth', () => ({ getCurrentUser: vi.fn() }))
+// 서버로 올리기도 가짜로 바꿔, 불렸는지만 본다 (올리기 자체는 syncService.test.ts에서 시험한다)
+vi.mock('./syncService', () => ({ uploadPending: vi.fn() }))
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 const USER_ID = '11111111-1111-4111-8111-111111111111'
@@ -39,6 +42,12 @@ describe('addRecord', () => {
   it('아직 서버로 안 보낸 기록(synced = 0)을 색인으로 찾을 수 있다', async () => {
     await addRecord({ type: 'fertigation', house_no: 1, work_date: '2026-10-22', memo: null })
     expect(await db.records.where('synced').equals(0).count()).toBe(1)
+  })
+
+  it('저장한 뒤 서버로 올리기를 시작한다', async () => {
+    vi.mocked(uploadPending).mockClear()
+    await addRecord({ type: 'fertigation', house_no: 1, work_date: '2026-10-22', memo: null })
+    expect(uploadPending).toHaveBeenCalledTimes(1)
   })
 
   it('로그인 전에는 저장하지 않는다', async () => {

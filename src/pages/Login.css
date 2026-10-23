@@ -1,0 +1,12 @@
+/* 로그인 화면. 카드·입력 칸·버튼은 RecordForm.css를 같이 쓰고, 여기는 위쪽 여백과 안내 글자만 둔다 */
+
+.login {
+  padding-top: 2rem; /* 목록·입력 화면과 달리 위에 "‹ 목록" 줄이 없어서 그만큼 내린다 */
+}
+
+.page-header .login-lead {
+  margin-top: 0.3rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-sub);
+}

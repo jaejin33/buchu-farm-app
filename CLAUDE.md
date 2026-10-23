@@ -142,14 +142,20 @@ src/
 ├ data/
 │  ├ db.ts                  Dexie 설정 (기록 + synced 0/1)
 │  ├ newId.ts               UUID 만들기 (http에서는 crypto.getRandomValues로 대신 만듦)
-│  ├ recordRepository.ts    화면은 여기만 호출
+│  ├ recordRepository.ts    화면은 기록을 읽고 쓸 때 여기만 호출
+│  ├ supabase.ts            Supabase 클라이언트 (처음 쓸 때 만듦)
+│  ├ auth.ts                로그인, 이 폰에서 로그인한 사람 (오프라인에서도 읽히게 폰에 따로 적어 둠)
 │  └ syncService.ts         Supabase 올리기 / 내려받기
 ├ App.tsx                   화면 전환 (목록 → 기록 입력 → 이력), 알림
 └ pages/
    ├ labels.ts              화면 표시용 글자 (날짜, 오늘/어제, 문제 이름)
+   ├ Login.tsx              로그인 (처음 한 번. 가입 화면은 없음)
    ├ HouseList.tsx
    ├ RecordForm.tsx
    └ History.tsx
+
+supabase/
+└ records.sql               records 테이블 + GRANT + RLS (Supabase SQL Editor에서 실행한 것)
 ```
 
 ## 문서 (`docs/`, 옵시디언 보관함)
@@ -180,9 +186,9 @@ src/
 | 3 | 기록 입력 화면 + Dexie 저장 | ✅ 완료 |
 | 4 | 이력 화면 | ✅ 완료 |
 | 5 | Vercel 배포 (GitHub `main`에 push하면 자동 배포). 아이폰에서 PWA를 시험하려면 https 주소가 필요해서 7단계에서 앞당김 | ✅ 완료 |
-| 5.1 | PWA 설정 (홈 화면 추가, 오프라인) | ⬜ 다음 |
-| 5.5 | 폰 한 대로 아버지께 보여드리고 직접 입력해 보시게 하기 (30초 안에 되는지, 글자·버튼 크기) | ⬜ |
-| 6 | Supabase 로그인 + 올리기·내려받기 동기화 | ⬜ |
+| 5.1 | PWA 설정 (홈 화면 추가, 오프라인). 아이폰 확인함, 갤럭시는 아버지 폰을 만질 때 확인 | ✅ 완료 |
+| 5.5 | 아버지 시험: 따로 자리를 만들지 않고, 아버지가 직접 써 보시고 알려주시기로 함 (30초 안에 되는지, 글자·버튼 크기). 갤럭시 설치 확인도 그때 | ⏸ 아버지 의견 기다림 |
+| 6 | Supabase 로그인 + 올리기·내려받기 동기화 | ⬜ 다음 |
 
 ## 미확정 사항 (추측하지 말고 물어볼 것)
 

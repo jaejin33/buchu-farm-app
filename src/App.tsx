@@ -1,10 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import './App.css'
 import { HOUSES } from './config/houses'
-import { useRecords } from './data/recordRepository'
+import { getCurrentUser } from './data/auth'
+import { removeTestRecords, useRecords } from './data/recordRepository'
 import { todayInKorea } from './domain/today'
 import History from './pages/History'
 import HouseList from './pages/HouseList'
+import Login from './pages/Login'
 import RecordForm from './pages/RecordForm'
 
 /** 지금 화면. null이면 목록, 아니면 그 동의 기록 입력(form) 또는 이력(history) */
@@ -23,6 +25,8 @@ function screenFromHistory(state: unknown): Screen {
 function App() {
   const today = todayInKorea()
   const records = useRecords()
+  // 이 폰에서 로그인한 사람. 인터넷이 끊겨 있어도 폰에 적어 둔 값이라 바로 읽힌다 (data/auth.ts)
+  const [user, setUser] = useState(getCurrentUser)
   // 새로고침해도 보던 화면이 유지되도록 방문 기록에서 처음 값을 읽는다
   const [screen, setScreen] = useState(() => screenFromHistory(history.state))
   const [message, setMessage] = useState<string | null>(null)
@@ -61,6 +65,14 @@ function App() {
     setMessage(text)
     history.back() // popstate가 일어나 목록으로 돌아간다
   }
+
+  /** 로그인 직후: 로그인 전에 넣은 시험 기록을 지우고 목록을 연다 */
+  async function handleLoggedIn() {
+    await removeTestRecords()
+    setUser(getCurrentUser())
+  }
+
+  if (user === null) return <Login onLoggedIn={handleLoggedIn} />
 
   // IndexedDB에서 처음 읽는 동안은 아무것도 그리지 않는다 (아주 잠깐이다)
   if (records === undefined) return null

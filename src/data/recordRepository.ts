@@ -5,10 +5,11 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { nowTimestamp } from '../domain/today'
 import type { FarmRecord } from '../domain/types'
+import { getCurrentUser } from './auth'
 import { db } from './db'
 import { newId } from './newId'
 
-/** 입력한 사람. 6단계에서 로그인을 붙이면 Supabase Auth 사용자 id로 바꾼다. 그 전까지는 모두 이 임시 id다 */
+/** 로그인을 붙이기 전(5단계까지) 시험 기록에 넣던 임시 입력자 id. 로그인할 때 이 기록들을 지운다 */
 export const LOCAL_USER_ID = '00000000-0000-0000-0000-000000000000'
 
 // 유니온 타입의 각 종류마다 Omit을 따로 적용한다.
@@ -18,11 +19,21 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K>
 /** 화면이 넘기는 새 기록. id·입력한 사람·입력 시각은 여기서 채운다 */
 export type NewRecord = DistributiveOmit<FarmRecord, 'id' | 'recorded_by' | 'recorded_at'>
 
-/** 기록을 폰(IndexedDB)에 저장한다. 서버로는 아직 안 보낸 상태(synced: 0)로 둔다 */
+/** 기록을 폰(IndexedDB)에 저장한다. 입력한 사람은 이 폰에서 로그인한 사람이다. 서버로는 아직 안 보낸 상태(synced: 0)로 둔다 */
 export async function addRecord(input: NewRecord): Promise<FarmRecord> {
-  const record: FarmRecord = { ...input, id: newId(), recorded_by: LOCAL_USER_ID, recorded_at: nowTimestamp() }
+  const user = getCurrentUser()
+  if (user === null) throw new Error('로그인 전에는 기록할 수 없어요')
+  const record: FarmRecord = { ...input, id: newId(), recorded_by: user.id, recorded_at: nowTimestamp() }
   await db.records.add({ ...record, synced: 0 })
   return record
+}
+
+/**
+ * 로그인 전에 넣은 시험 기록(입력한 사람이 임시 id)을 지운다. 로그인 직후 한 번 부른다.
+ * 기록은 추가만 한다는 규칙의 예외다: 시험 기록은 누가 넣었는지가 틀려서 서버로 보내지 않고 버리기로 했다
+ */
+export async function removeTestRecords(): Promise<void> {
+  await db.records.filter((r) => r.recorded_by === LOCAL_USER_ID).delete()
 }
 
 /** 폰에 있는 모든 기록 (취소된 기록과 cancel 기록 포함. 거르는 일은 domain 함수가 한다) */

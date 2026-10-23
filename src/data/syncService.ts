@@ -1,52 +1,77 @@
-// 동기화: 폰(IndexedDB)의 기록을 Supabase로 올린다 (6-4단계). 내려받기는 6-5단계에서 여기에 추가한다.
-// 화면은 항상 IndexedDB를 기준으로 그리므로, 올리기가 실패해도 화면과 입력은 그대로 동작한다.
-// 못 보낸 기록은 synced = 0으로 남아 있다가 다음 기회(저장 직후, 인터넷 재연결, 앱 실행)에 다시 보낸다
+// 동기화: 폰(IndexedDB)과 Supabase 사이에서 기록을 주고받는다.
+// - 올리기(6-4): 폰에서 저장한 기록 중 아직 안 보낸 것(synced = 0)을 서버로
+// - 내려받기(6-5): 서버에 새로 들어온 기록(다른 폰에서 올린 것) 중 폰에 없는 것을 폰으로
+// 화면은 항상 IndexedDB를 기준으로 그리므로, 주고받기가 실패해도 화면과 입력은 그대로 동작한다.
+// 실패하면 다음 기회(저장 직후, 인터넷 재연결, 앱 실행, 앱 화면으로 돌아옴)에 다시 한다
 
-import type { FarmRecord } from '../domain/types'
+import type { FarmRecord, HouseProblem, RecordType } from '../domain/types'
 import { db, type StoredRecord } from './db'
 import { getSupabase } from './supabase'
 
 /** PostgreSQL 에러 코드: 같은 기본 키(id)가 이미 있음 */
 const DUPLICATE_KEY = '23505'
 
-// 올리기가 도는 중이면 그 작업. 저장 직후·재연결·앱 실행이 겹쳐도 한 번에 하나만 돌게 한다
-let running: Promise<void> | null = null
-// 도는 중에 또 불렸으면 true. 그사이 저장된 기록도 보내도록 끝난 뒤 한 번 더 돈다
-let again = false
+/** 마지막으로 받은 기록의 서버 시각(received_at). 다음 내려받기는 이 시각 근처부터 가져온다 */
+const LAST_RECEIVED_KEY = 'buchu-farm:last-received-at'
 
 /**
- * 아직 안 보낸 기록(synced = 0)을 Supabase로 보낸다. 에러를 던지지 않는다 (실패하면 다음에 다시 보낸다).
- * 보낸 기록과 "이미 서버에 있다"는 기록은 synced = 1로 바꾼다
+ * 내려받을 때 마지막으로 받은 시각보다 이만큼 앞부터 다시 가져온다.
+ * received_at은 서버가 저장을 "시작한" 시각이라, 먼저 시작해 늦게 끝난 기록은 더 늦은 기록보다 늦게 보일 수 있다.
+ * 그런 기록을 놓치지 않게 겹쳐 가져오고, 이미 폰에 있는 기록은 id로 거른다
  */
-export function uploadPending(): Promise<void> {
-  if (running !== null) {
-    again = true
+const OVERLAP_MS = 5 * 60 * 1000
+
+/** 한 번 요청에 받는 기록 수. Supabase는 한 번에 최대 1000줄까지 돌려준다 */
+const PAGE_SIZE = 1000
+
+/**
+ * 한 번에 하나만 돌게 감싼다. 도는 중에 또 불리면 새로 시작하지 않고, 끝난 뒤 한 번 더 돈다
+ * (그사이 저장되거나 들어온 기록도 놓치지 않게). 에러를 던지지 않는다 (실패하면 다음에 다시 한다)
+ */
+function oneAtATime(name: string, task: () => Promise<void>): () => Promise<void> {
+  let running: Promise<void> | null = null
+  let again = false
+  return () => {
+    if (running !== null) {
+      again = true
+      return running
+    }
+    running = (async () => {
+      try {
+        do {
+          again = false
+          await task()
+        } while (again)
+      } catch (e) {
+        console.warn(`${name} 실패 (다음에 다시 함)`, e)
+      } finally {
+        running = null
+      }
+    })()
     return running
   }
-  running = (async () => {
-    try {
-      do {
-        again = false
-        await uploadOnce()
-      } while (again)
-    } catch (e) {
-      console.warn('기록 올리기 실패 (다음에 다시 보냄)', e)
-    } finally {
-      running = null
-    }
-  })()
-  return running
 }
 
-async function uploadOnce(): Promise<void> {
-  if (!navigator.onLine) return
-  const pending = await db.records.where('synced').equals(0).toArray()
-  if (pending.length === 0) return
-
-  // 로그인 표(토큰)가 지났으면 여기서 새로 받는다. 못 받으면(인터넷 끊김 등) 다음에 보낸다
+/** 인터넷이 되고 로그인 표(토큰)가 살아 있으면 Supabase 클라이언트, 아니면 null */
+async function connectedSupabase() {
+  if (!navigator.onLine) return null
+  // 로그인 표가 지났으면 여기서 새로 받는다. 못 받으면(인터넷 끊김 등) null
   const supabase = getSupabase()
   const { data } = await supabase.auth.getSession()
-  if (data.session === null) return
+  return data.session === null ? null : supabase
+}
+
+// ---- 올리기 ----
+
+/**
+ * 아직 안 보낸 기록(synced = 0)을 Supabase로 보낸다.
+ * 보낸 기록과 "이미 서버에 있다"는 기록은 synced = 1로 바꾼다
+ */
+export const uploadPending = oneAtATime('기록 올리기', async () => {
+  const pending = await db.records.where('synced').equals(0).toArray()
+  if (pending.length === 0) return
+  const supabase = await connectedSupabase()
+  if (supabase === null) return
 
   // 한 건씩 보낸다. 여러 건을 한 번에 보내면 그중 하나만 "이미 있음"이어도 전부 실패하기 때문이다.
   // 하루에 많아야 수십 건이라 한 건씩 보내도 충분히 빠르다
@@ -60,7 +85,7 @@ async function uploadOnce(): Promise<void> {
       console.warn('기록 올리기 실패', stored.id, error)
     }
   }
-}
+})
 
 /** IndexedDB 기록 → Supabase records 테이블 한 줄. 폰에서만 쓰는 synced는 빼고 보낸다 */
 function toRow(stored: StoredRecord): FarmRecord {
@@ -68,13 +93,150 @@ function toRow(stored: StoredRecord): FarmRecord {
   return record
 }
 
+// ---- 내려받기 ----
+
+/** Supabase records 테이블 한 줄. 그 종류에 없는 칸은 null로 온다 */
+export interface RecordRow {
+  id: string
+  house_no: number
+  work_date: string
+  type: RecordType
+  pesticide: string | null
+  cycle_days: number | null
+  boxes: number | null
+  bunches: number | null
+  problem: HouseProblem | null
+  resolved: boolean | null
+  target_id: string | null
+  memo: string | null
+  recorded_by: string
+  recorded_at: string
+  received_at: string
+}
+
 /**
- * 앱이 열리고 로그인되어 있을 때 한 번 부른다: 지금 올리고, 인터넷이 다시 연결될 때마다 올린다.
- * 돌려주는 함수를 부르면 재연결 감시를 멈춘다 (React useEffect의 정리 함수로 쓴다)
+ * 서버에 새로 들어온 기록 중 폰에 없는 것을 IndexedDB에 추가한다 (synced = 1, 이미 서버에 있으므로).
+ * 폰에 있는 기록은 건드리지 않는다 (기록은 추가만 하므로 같은 id면 같은 기록이다)
+ */
+export const downloadNew = oneAtATime('기록 내려받기', async () => {
+  const supabase = await connectedSupabase()
+  if (supabase === null) return
+
+  const last = readLastReceivedAt()
+  const since = last === null ? null : new Date(Date.parse(last) - OVERLAP_MS).toISOString()
+
+  // 받은 순서(received_at, 같으면 id)로 줄 세워 PAGE_SIZE개씩 끊어 받는다. 처음 받는 폰은 기록 전부를 받는다
+  for (let from = 0; ; from += PAGE_SIZE) {
+    let query = supabase.from('records').select('*')
+    if (since !== null) query = query.gte('received_at', since)
+    const { data, error } = await query
+      .order('received_at')
+      .order('id')
+      .range(from, from + PAGE_SIZE - 1)
+      .overrideTypes<RecordRow[], { merge: false }>() // 돌아오는 줄의 타입을 알려 준다 (테이블 타입을 따로 만들지 않아서)
+    if (error !== null) throw error
+
+    await addMissing(data)
+    // 폰에 다 넣은 뒤에 시각을 적는다. 넣다가 실패하면 다음에 같은 곳부터 다시 받는다
+    if (data.length > 0) writeLastReceivedAt(data[data.length - 1].received_at)
+    if (data.length < PAGE_SIZE) return
+  }
+})
+
+/** 서버 기록 중 폰에 없는 id만 추가한다 */
+async function addMissing(rows: RecordRow[]): Promise<void> {
+  const records = rows.flatMap((row) => {
+    const r = fromRow(row)
+    if (r === null) console.warn('알 수 없는 기록이라 건너뜀', row.id)
+    return r === null ? [] : [r]
+  })
+  if (records.length === 0) return
+  // 있는지 보기와 추가를 한 묶음(transaction)으로 한다. 그사이 같은 기록이 다른 곳에서 추가되지 않게
+  await db.transaction('rw', db.records, async () => {
+    const existing = await db.records.bulkGet(records.map((r) => r.id))
+    const missing = records.filter((_, i) => existing[i] === undefined)
+    await db.records.bulkAdd(missing.map((r) => ({ ...r, synced: 1 as const })))
+  })
+}
+
+/**
+ * Supabase 한 줄 → 기록. 그 종류에 없는 칸(null)은 빼서 폰에서 만든 기록과 모양을 같게 한다.
+ * 꼭 있어야 할 칸이 비었거나 모르는 종류면 null (건너뛴다)
+ */
+export function fromRow(row: RecordRow): FarmRecord | null {
+  const base = {
+    id: row.id,
+    house_no: row.house_no,
+    work_date: row.work_date,
+    memo: row.memo,
+    recorded_by: row.recorded_by,
+    // 서버는 "2026-10-23T01:00:00.123+00:00"처럼 돌려준다. 폰에서 만든 기록과 같은 모양("…123Z")으로 바꾼다
+    recorded_at: new Date(row.recorded_at).toISOString(),
+  }
+  switch (row.type) {
+    case 'spray':
+      return { ...base, type: row.type, pesticide: row.pesticide }
+    case 'top_dressing':
+    case 'fertigation':
+    case 'harvest_start':
+      return { ...base, type: row.type }
+    case 'harvest':
+      return row.cycle_days === null ? null : { ...base, type: row.type, cycle_days: row.cycle_days }
+    case 'harvest_amount':
+      return row.target_id === null || row.boxes === null || row.bunches === null
+        ? null
+        : { ...base, type: row.type, target_id: row.target_id, boxes: row.boxes, bunches: row.bunches }
+    case 'problem':
+      return row.problem === null || row.resolved === null
+        ? null
+        : { ...base, type: row.type, problem: row.problem, resolved: row.resolved }
+    case 'cancel':
+      return row.target_id === null ? null : { ...base, type: row.type, target_id: row.target_id }
+    default:
+      return null
+  }
+}
+
+function readLastReceivedAt(): string | null {
+  try {
+    return localStorage.getItem(LAST_RECEIVED_KEY)
+  } catch {
+    return null
+  }
+}
+
+function writeLastReceivedAt(receivedAt: string): void {
+  try {
+    localStorage.setItem(LAST_RECEIVED_KEY, receivedAt)
+  } catch {
+    // 못 적으면 다음에 처음부터 다시 받는다 (폰에 있는 기록은 id로 걸러져서 문제없다)
+  }
+}
+
+// ---- 시작 ----
+
+/** 올리고 나서 내려받는다 */
+async function syncNow(): Promise<void> {
+  await uploadPending()
+  await downloadNew()
+}
+
+/**
+ * 앱이 열리고 로그인되어 있을 때 한 번 부른다: 지금 주고받고, 인터넷이 다시 연결될 때와
+ * 앱 화면으로 돌아올 때마다 주고받는다. (홈 화면 앱은 꺼지지 않고 뒤에 있다가 다시 보이는 일이 많아서,
+ * 돌아올 때 받지 않으면 다른 폰의 기록이 앱을 완전히 껐다 켤 때까지 안 보인다)
+ * 돌려주는 함수를 부르면 감시를 멈춘다 (React useEffect의 정리 함수로 쓴다)
  */
 export function startSync(): () => void {
-  const onOnline = () => void uploadPending()
+  const onOnline = () => void syncNow()
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') void syncNow()
+  }
   window.addEventListener('online', onOnline)
-  void uploadPending()
-  return () => window.removeEventListener('online', onOnline)
+  document.addEventListener('visibilitychange', onVisible)
+  void syncNow()
+  return () => {
+    window.removeEventListener('online', onOnline)
+    document.removeEventListener('visibilitychange', onVisible)
+  }
 }

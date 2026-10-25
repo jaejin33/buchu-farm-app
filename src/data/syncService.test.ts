@@ -2,16 +2,17 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { db, type StoredRecord } from './db'
-import { downloadNew, fromRow, uploadPending, type RecordRow } from './syncService'
+import { downloadNew, downloadProfiles, fromRow, uploadPending, type RecordRow } from './syncService'
 
 // 진짜 Supabase 대신, 보낸 기록을 받아 정해 둔 답을 돌려주는 가짜를 끼운다.
 // vi.mock은 파일 맨 위로 끌어올려져 실행되므로, 안에서 쓰는 가짜 함수도 vi.hoisted로 먼저 만든다
-const { insert, getSession, gte, range, fetchPage } = vi.hoisted(() => ({
+const { insert, getSession, gte, range, fetchPage, fetchProfiles } = vi.hoisted(() => ({
   insert: vi.fn(),
   getSession: vi.fn(),
   gte: vi.fn(), // 내려받기의 "이 시각 이후" 조건
   range: vi.fn(), // 내려받기의 "몇 번째부터 몇 번째까지"
   fetchPage: vi.fn(), // 내려받기 요청 한 번의 답 ({ data, error })
+  fetchProfiles: vi.fn(), // 이름 받기 요청의 답 ({ data, error })
 }))
 vi.mock('./supabase', () => {
   // select('*').gte(...).order(...).order(...).range(...).overrideTypes() 처럼 이어 부르는 것을 흉내 낸다
@@ -22,7 +23,13 @@ vi.mock('./supabase', () => {
     overrideTypes: () => fetchPage(),
   }
   return {
-    getSupabase: () => ({ auth: { getSession }, from: () => ({ insert, select: () => query }) }),
+    getSupabase: () => ({
+      auth: { getSession },
+      from: (table: string) =>
+        table === 'profiles'
+          ? { select: () => ({ overrideTypes: () => fetchProfiles() }) }
+          : { insert, select: () => query },
+    }),
   }
 })
 
@@ -82,11 +89,13 @@ async function syncedOf(id: string) {
 
 beforeEach(async () => {
   await db.records.clear()
+  await db.profiles.clear()
   insert.mockReset().mockResolvedValue(OK)
   getSession.mockReset().mockResolvedValue(LOGGED_IN)
   gte.mockReset()
   range.mockReset()
   fetchPage.mockReset().mockResolvedValue({ data: [], error: null })
+  fetchProfiles.mockReset().mockResolvedValue({ data: [], error: null })
   vi.stubGlobal('navigator', { onLine: true })
   // 테스트(Node)의 localStorage 대신 메모리에 두는 가짜
   const saved = new Map<string, string>()
@@ -284,6 +293,36 @@ describe('downloadNew', () => {
 
     expect(await db.records.get(broken.id)).toBeUndefined()
     expect(await syncedOf(ok.id)).toBe(1)
+  })
+})
+
+describe('downloadProfiles', () => {
+  it('서버의 이름 표로 폰의 것을 통째로 바꾼다 (서버에서 지운 이름은 폰에서도 지워진다)', async () => {
+    await db.profiles.bulkAdd([
+      { id: USER_A, name: '예전 이름' },
+      { id: USER_B, name: '지워질 사람' },
+    ])
+    fetchProfiles.mockResolvedValueOnce({ data: [{ id: USER_A, name: '아버지' }], error: null })
+
+    await downloadProfiles()
+
+    expect(await db.profiles.toArray()).toEqual([{ id: USER_A, name: '아버지' }])
+  })
+
+  it('받다가 에러가 나면 던지지 않고, 폰의 이름 표는 그대로 둔다', async () => {
+    await db.profiles.add({ id: USER_A, name: '아버지' })
+    fetchProfiles.mockResolvedValueOnce({ data: null, error: { code: '42501', message: 'permission denied' } })
+
+    await expect(downloadProfiles()).resolves.toBeUndefined()
+    expect(await db.profiles.toArray()).toEqual([{ id: USER_A, name: '아버지' }])
+  })
+
+  it('인터넷이 끊겨 있으면 받지 않는다', async () => {
+    vi.stubGlobal('navigator', { onLine: false })
+
+    await downloadProfiles()
+
+    expect(fetchProfiles).not.toHaveBeenCalled()
   })
 })
 

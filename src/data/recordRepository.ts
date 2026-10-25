@@ -4,7 +4,7 @@
 
 import { useLiveQuery } from 'dexie-react-hooks'
 import { nowTimestamp } from '../domain/today'
-import type { FarmRecord } from '../domain/types'
+import type { FarmRecord, Profile } from '../domain/types'
 import { getCurrentUser } from './auth'
 import { db } from './db'
 import { newId } from './newId'
@@ -53,4 +53,12 @@ export function getAllRecords(): Promise<FarmRecord[]> {
  */
 export function useRecords(): FarmRecord[] | undefined {
   return useLiveQuery(getAllRecords)
+}
+
+/**
+ * 화면용: 폰에 받아 둔 사람 이름 표. 동기화로 바뀌면 화면을 다시 그린다.
+ * 처음 읽는 동안에는 undefined다
+ */
+export function useProfiles(): Profile[] | undefined {
+  return useLiveQuery(() => db.profiles.toArray())
 }

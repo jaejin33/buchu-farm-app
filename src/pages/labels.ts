@@ -1,7 +1,7 @@
 // 여러 화면에서 같이 쓰는 표시용 글자.
 
 import { daysBetween } from '../domain/harvestCalc'
-import type { HouseProblem } from '../domain/types'
+import type { HouseProblem, Profile } from '../domain/types'
 
 // 문제 표시. 아이콘만으로는 뜻을 알기 어려워 글자를 함께 쓴다
 export const PROBLEM_TAG: Record<HouseProblem, { icon: string; label: string }> = {
@@ -24,4 +24,9 @@ export function relativeDay(date: string, today: string): string {
   if (days === 0) return '오늘'
   if (days === 1) return '어제'
   return `${days}일 전`
+}
+
+/** 입력한 사람의 이름. 이름 표에 없으면(아직 못 받았거나 Supabase에 안 넣음) "모르는 사람" */
+export function nameOf(profiles: readonly Profile[], userId: string): string {
+  return profiles.find((p) => p.id === userId)?.name ?? '모르는 사람'
 }

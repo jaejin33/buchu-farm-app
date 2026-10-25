@@ -1,10 +1,11 @@
 // 동기화: 폰(IndexedDB)과 Supabase 사이에서 기록을 주고받는다.
 // - 올리기(6-4): 폰에서 저장한 기록 중 아직 안 보낸 것(synced = 0)을 서버로
 // - 내려받기(6-5): 서버에 새로 들어온 기록(다른 폰에서 올린 것) 중 폰에 없는 것을 폰으로
+// - 이름 받기(6-6): 사람 이름 표(profiles)를 통째로 폰으로
 // 화면은 항상 IndexedDB를 기준으로 그리므로, 주고받기가 실패해도 화면과 입력은 그대로 동작한다.
 // 실패하면 다음 기회(저장 직후, 인터넷 재연결, 앱 실행, 앱 화면으로 돌아옴)에 다시 한다
 
-import type { FarmRecord, HouseProblem, RecordType } from '../domain/types'
+import type { FarmRecord, HouseProblem, Profile, RecordType } from '../domain/types'
 import { db, type StoredRecord } from './db'
 import { getSupabase } from './supabase'
 
@@ -213,12 +214,34 @@ function writeLastReceivedAt(receivedAt: string): void {
   }
 }
 
+// ---- 이름 받기 ----
+
+/**
+ * 사람 이름 표(profiles)를 통째로 받아 폰의 것을 바꾼다. 몇 줄 안 되고 개발자가 고칠 수 있는 표라,
+ * 기록처럼 새것만 골라 받지 않고 매번 다 받아 덮어쓴다 (서버에서 지운 이름도 폰에서 지워진다)
+ */
+export const downloadProfiles = oneAtATime('이름 받기', async () => {
+  const supabase = await connectedSupabase()
+  if (supabase === null) return
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, name')
+    .overrideTypes<Profile[], { merge: false }>()
+  if (error !== null) throw error
+  // 지우기와 넣기를 한 묶음으로 한다. 그사이 화면이 이름 없는 표를 읽지 않게
+  await db.transaction('rw', db.profiles, async () => {
+    await db.profiles.clear()
+    await db.profiles.bulkPut(data)
+  })
+})
+
 // ---- 시작 ----
 
-/** 올리고 나서 내려받는다 */
+/** 올리고 나서 내려받고, 이름도 받는다 */
 async function syncNow(): Promise<void> {
   await uploadPending()
   await downloadNew()
+  await downloadProfiles()
 }
 
 /**

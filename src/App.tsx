@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import './App.css'
 import { HOUSES } from './config/houses'
 import { getCurrentUser } from './data/auth'
-import { removeTestRecords, useRecords } from './data/recordRepository'
+import { removeTestRecords, useProfiles, useRecords } from './data/recordRepository'
 import { startSync } from './data/syncService'
 import { todayInKorea } from './domain/today'
 import History from './pages/History'
@@ -26,6 +26,7 @@ function screenFromHistory(state: unknown): Screen {
 function App() {
   const today = todayInKorea()
   const records = useRecords()
+  const profiles = useProfiles()
   // 이 폰에서 로그인한 사람. 인터넷이 끊겨 있어도 폰에 적어 둔 값이라 바로 읽힌다 (data/auth.ts)
   const [user, setUser] = useState(getCurrentUser)
   // 새로고침해도 보던 화면이 유지되도록 방문 기록에서 처음 값을 읽는다
@@ -41,7 +42,8 @@ function App() {
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
-  // 로그인되어 있으면 안 보낸 기록을 서버로 올린다: 앱을 열 때(로그인 직후 포함) 한 번, 인터넷이 다시 연결될 때마다
+  // 로그인되어 있으면 서버와 주고받는다 (올리기 → 내려받기 → 이름 받기):
+  // 앱을 열 때(로그인 직후 포함) 한 번, 인터넷이 다시 연결될 때와 앱 화면으로 돌아올 때마다
   useEffect(() => {
     if (user === null) return
     return startSync()
@@ -109,6 +111,7 @@ function App() {
         <History
           house={house}
           records={records}
+          profiles={profiles ?? []}
           today={today}
           onBack={() => history.back()}
           onCanceled={setMessage}

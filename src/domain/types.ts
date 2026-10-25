@@ -14,6 +14,14 @@ export interface House {
   crop: string // 작물. 지금은 모두 부추지만 다른 작물을 심을 수 있어 항목으로 둔다
 }
 
+// ---- 사람 ----
+
+/** 입력한 사람의 이름. Supabase `profiles` 테이블과 같은 모양이다 (이름은 Supabase에서 개발자가 넣는다) */
+export interface Profile {
+  id: string // Supabase Auth 사용자 id (= 기록의 recorded_by)
+  name: string // "아버지", "형"
+}
+
 // ---- 기록 ----
 // 필드 이름은 Supabase `records` 테이블 컬럼과 같게 맞춘다.
 // 타입 이름을 `Record` 대신 `FarmRecord`로 한 이유: TypeScript에 내장된 `Record<K, V>` 타입과 이름이 겹치기 때문이다.

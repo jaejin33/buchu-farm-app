@@ -1,13 +1,13 @@
 // 이력 화면. 한 동의 기록을 최근 순으로, 날짜별로 묶어 보여준다. 기록 입력 화면의 "지난 기록"에서 열린다.
 // 잘못 입력한 기록은 줄마다 [취소]로 취소한다. 기록을 지우지 않고 cancel 기록을 추가한다 (CLAUDE.md 데이터 규칙).
-// 입력한 사람은 6단계에서 로그인을 붙인 뒤 표시한다. 그 전에는 모든 기록이 같은 임시 id라 보여줄 이름이 없다.
+// 줄마다 입력한 사람("아버지")을 아랫줄에 작게 쓴다. 이름은 Supabase profiles 표에서 받아 둔 것이다 (6-6).
 
 import { useEffect, useRef, useState } from 'react'
 import { addRecord } from '../data/recordRepository'
 import { houseHistory, latestHarvestAmount } from '../domain/recordQueries'
-import type { FarmRecord, House } from '../domain/types'
+import type { FarmRecord, House, Profile } from '../domain/types'
 import './History.css'
-import { PROBLEM_TAG, formatDate, relativeDay } from './labels'
+import { PROBLEM_TAG, formatDate, nameOf, relativeDay } from './labels'
 
 /** 이력 한 줄의 글자: 무엇(title), 자세한 내용(detail), 아랫줄 설명(note) */
 function describe(
@@ -58,13 +58,14 @@ function groupByDate(records: FarmRecord[]): { date: string; records: FarmRecord
 interface Props {
   house: House
   records: readonly FarmRecord[]
+  profiles: readonly Profile[]
   today: string
   onBack: () => void
   /** 기록을 취소하면 부른다. message는 화면 아래에 잠깐 띄울 글자 */
   onCanceled: (message: string) => void
 }
 
-export default function History({ house, records, today, onBack, onCanceled }: Props) {
+export default function History({ house, records, profiles, today, onBack, onCanceled }: Props) {
   // [취소]를 한 번 누른 기록 id. 그 줄에 "취소할까요?"를 묻는다 (장갑 낀 손으로 잘못 눌러도 바로 취소되지 않게)
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -121,6 +122,8 @@ export default function History({ house, records, today, onBack, onCanceled }: P
           <ul>
             {group.records.map((r) => {
               const { title, detail, note } = describe(r, records)
+              // 아랫줄: "아버지" 또는 "아버지 · 10월 20일 (화) 수확분"
+              const byline = [nameOf(profiles, r.recorded_by), note].filter((s) => s !== undefined).join(' · ')
               const confirming = confirmingId === r.id
               // 수확 완료를 취소하면 그 수확량도 계산에서 빠진다. 미리 알려 준다
               const hasAmount = r.type === 'harvest' && latestHarvestAmount(records, r.id) !== null
@@ -134,7 +137,7 @@ export default function History({ house, records, today, onBack, onCanceled }: P
                     <span className="history-text">
                       <span className="history-title">{title}</span>
                       {detail !== null && <span className="history-detail">{detail}</span>}
-                      {note !== undefined && <span className="history-note">{note}</span>}
+                      <span className="history-note">{byline}</span>
                     </span>
                     {!confirming && (
                       <button

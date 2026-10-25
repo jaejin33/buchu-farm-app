@@ -63,11 +63,15 @@ await db.records.where('synced').equals(0).count()          // 아직 안 보낸
 
 ```ts
 db.version(1).stores({ records: 'id, synced' })
-// 나중에 house_no 색인이 필요하면
-db.version(2).stores({ records: 'id, synced, house_no' })
+// 6-6에서 사람 이름 표를 더함 (src/data/db.ts)
+db.version(2).stores({ profiles: 'id' })
 ```
 
-폰에는 이미 `version(1)`로 만든 DB가 있다. 앱이 `version(2)`를 보면 그 DB를 새 구조로 바꾼다. **`version(1)` 줄을 고치면 이미 설치된 폰과 어긋난다.** Flyway에서 이미 실행된 `V1__init.sql`을 고치지 않고 `V2__add_index.sql`을 추가하는 것과 같다.
+폰에는 이미 `version(1)`로 만든 DB가 있다. 앱이 `version(2)`를 보면 그 DB를 새 구조로 바꾼다. **`version(1)` 줄을 고치면 이미 설치된 폰과 어긋난다.** Flyway에서 이미 실행된 `V1__init.sql`을 고치지 않고 `V2__add_profiles.sql`을 추가하는 것과 같다.
+
+- **새 버전에는 바뀐 표만 적는다.** `version(2)`에 `records`를 안 적었지만 지워지지 않는다. 적지 않은 표는 지난 버전 그대로 둔다. 표를 지우려면 `records: null`처럼 일부러 적어야 한다
+- 아버지 폰처럼 이미 기록이 있는 폰도 새 버전 앱을 처음 열 때 저절로 2로 올라가고, 기록은 그대로 남는다
+- 색인을 바꿀 때도 같다. 예: `db.version(3).stores({ records: 'id, synced, house_no' })`
 
 ## 4. 읽고 쓰기
 

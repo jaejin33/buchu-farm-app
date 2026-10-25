@@ -2,9 +2,15 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import './App.css'
 import { HOUSES } from './config/houses'
 import { getCurrentUser } from './data/auth'
-import { removeTestRecords, useProfiles, useRecords } from './data/recordRepository'
+import {
+  removeTestRecords,
+  useLastSyncedAt,
+  usePendingCount,
+  useProfiles,
+  useRecords,
+} from './data/recordRepository'
 import { startSync } from './data/syncService'
-import { todayInKorea } from './domain/today'
+import { nowTimestamp, todayInKorea } from './domain/today'
 import History from './pages/History'
 import HouseList from './pages/HouseList'
 import Login from './pages/Login'
@@ -24,9 +30,13 @@ function screenFromHistory(state: unknown): Screen {
 // 화면이 셋뿐이라 라우터 라이브러리 없이, 지금 화면 값 하나(screen)로 어떤 화면을 그릴지 정한다.
 // 열 때 history.pushState로 방문 기록을 하나 쌓아서, 폰의 "뒤로 가기" 버튼을 누르면 앱이 꺼지지 않고 한 화면씩 돌아온다.
 function App() {
-  const today = todayInKorea()
+  // 지금 시각. 1분마다 바꿔 화면을 다시 그린다 ("마지막 동기화: N분 전"이 늘어나고, 자정이 지나면 오늘도 바뀌게)
+  const [now, setNow] = useState(() => nowTimestamp())
+  const today = todayInKorea(new Date(now))
   const records = useRecords()
   const profiles = useProfiles()
+  const pendingCount = usePendingCount()
+  const lastSyncedAt = useLastSyncedAt()
   // 이 폰에서 로그인한 사람. 인터넷이 끊겨 있어도 폰에 적어 둔 값이라 바로 읽힌다 (data/auth.ts)
   const [user, setUser] = useState(getCurrentUser)
   // 새로고침해도 보던 화면이 유지되도록 방문 기록에서 처음 값을 읽는다
@@ -40,6 +50,17 @@ function App() {
     const onPopState = (e: PopStateEvent) => setScreen(screenFromHistory(e.state))
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  // 앱이 뒤에 있는 동안은 타이머가 멈출 수 있어서, 앱 화면으로 돌아올 때도 바로 바꾼다
+  useEffect(() => {
+    const tick = () => setNow(nowTimestamp())
+    const timer = setInterval(tick, 60_000)
+    document.addEventListener('visibilitychange', tick)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', tick)
+    }
   }, [])
 
   // 로그인되어 있으면 서버와 주고받는다 (올리기 → 내려받기 → 이름 받기):
@@ -95,6 +116,9 @@ function App() {
           houses={HOUSES}
           records={records}
           today={today}
+          now={now}
+          pendingCount={pendingCount ?? 0}
+          lastSyncedAt={lastSyncedAt}
           onSelectHouse={(no) => open({ houseNo: no, view: 'form' })}
         />
       ) : screen.view === 'form' ? (

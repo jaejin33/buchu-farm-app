@@ -5,6 +5,7 @@
 // 화면은 항상 IndexedDB를 기준으로 그리므로, 주고받기가 실패해도 화면과 입력은 그대로 동작한다.
 // 실패하면 다음 기회(저장 직후, 인터넷 재연결, 앱 실행, 앱 화면으로 돌아옴)에 다시 한다
 
+import { nowTimestamp } from '../domain/today'
 import type { FarmRecord, HouseProblem, Profile, RecordType } from '../domain/types'
 import { db, type StoredRecord } from './db'
 import { getSupabase } from './supabase'
@@ -24,6 +25,9 @@ const OVERLAP_MS = 5 * 60 * 1000
 
 /** 한 번 요청에 받는 기록 수. Supabase는 한 번에 최대 1000줄까지 돌려준다 */
 const PAGE_SIZE = 1000
+
+/** 마지막으로 서버에서 끝까지 받은 시각 (폰 시각). 화면의 "마지막 동기화: N분 전"에 쓴다 */
+const LAST_SYNCED_KEY = 'buchu-farm:last-synced-at'
 
 /**
  * 한 번에 하나만 돌게 감싼다. 도는 중에 또 불리면 새로 시작하지 않고, 끝난 뒤 한 번 더 돈다
@@ -140,8 +144,10 @@ export const downloadNew = oneAtATime('기록 내려받기', async () => {
     await addMissing(data)
     // 폰에 다 넣은 뒤에 시각을 적는다. 넣다가 실패하면 다음에 같은 곳부터 다시 받는다
     if (data.length > 0) writeLastReceivedAt(data[data.length - 1].received_at)
-    if (data.length < PAGE_SIZE) return
+    if (data.length < PAGE_SIZE) break
   }
+  // 끝까지 받았다 = 서버와 이어져 있었다. 올리기는 바로 앞에서 했으니(syncNow), 못 올린 기록은 "미전송 N건"에 남는다
+  writeLastSyncedAt(nowTimestamp())
 })
 
 /** 서버 기록 중 폰에 없는 id만 추가한다 */
@@ -212,6 +218,35 @@ function writeLastReceivedAt(receivedAt: string): void {
   } catch {
     // 못 적으면 다음에 처음부터 다시 받는다 (폰에 있는 기록은 id로 걸러져서 문제없다)
   }
+}
+
+// ---- 마지막 동기화 시각 ----
+
+/** 마지막 동기화 시각이 바뀌면 부를 함수들 (화면이 다시 그리게) */
+const lastSyncedListeners = new Set<() => void>()
+
+/** 마지막으로 서버에서 끝까지 받은 시각 (ISO 문자열). 한 번도 못 받았으면 null */
+export function getLastSyncedAt(): string | null {
+  try {
+    return localStorage.getItem(LAST_SYNCED_KEY)
+  } catch {
+    return null
+  }
+}
+
+/** 마지막 동기화 시각이 바뀔 때 listener를 부른다. 돌려주는 함수를 부르면 멈춘다 */
+export function subscribeLastSyncedAt(listener: () => void): () => void {
+  lastSyncedListeners.add(listener)
+  return () => lastSyncedListeners.delete(listener)
+}
+
+function writeLastSyncedAt(time: string): void {
+  try {
+    localStorage.setItem(LAST_SYNCED_KEY, time)
+  } catch {
+    // 못 적으면 화면에 "동기화 전"으로 보일 뿐이다
+  }
+  lastSyncedListeners.forEach((listener) => listener())
 }
 
 // ---- 이름 받기 ----

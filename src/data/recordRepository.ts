@@ -3,12 +3,13 @@
 // 기록은 추가만 한다 (수정·삭제 함수는 일부러 만들지 않는다. 잘못 입력하면 cancel 기록을 추가한다).
 
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useSyncExternalStore } from 'react'
 import { nowTimestamp } from '../domain/today'
 import type { FarmRecord, Profile } from '../domain/types'
 import { getCurrentUser } from './auth'
 import { db } from './db'
 import { newId } from './newId'
-import { uploadPending } from './syncService'
+import { getLastSyncedAt, subscribeLastSyncedAt, uploadPending } from './syncService'
 
 /** 로그인을 붙이기 전(5단계까지) 시험 기록에 넣던 임시 입력자 id. 로그인할 때 이 기록들을 지운다 */
 export const LOCAL_USER_ID = '00000000-0000-0000-0000-000000000000'
@@ -61,4 +62,18 @@ export function useRecords(): FarmRecord[] | undefined {
  */
 export function useProfiles(): Profile[] | undefined {
   return useLiveQuery(() => db.profiles.toArray())
+}
+
+/**
+ * 화면용: 아직 서버로 못 보낸 기록 수. 저장하거나 올리기가 끝나면 화면을 다시 그린다.
+ * 처음 읽는 동안에는 undefined다
+ */
+export function usePendingCount(): number | undefined {
+  return useLiveQuery(() => db.records.where('synced').equals(0).count())
+}
+
+/** 화면용: 마지막으로 서버에서 끝까지 받은 시각 (한 번도 못 받았으면 null). 바뀌면 화면을 다시 그린다 */
+export function useLastSyncedAt(): string | null {
+  // useSyncExternalStore: React 밖(localStorage)에 있는 값을 읽고, 바뀐다는 알림이 오면 다시 그린다
+  return useSyncExternalStore(subscribeLastSyncedAt, getLastSyncedAt)
 }

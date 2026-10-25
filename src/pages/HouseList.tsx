@@ -1,11 +1,12 @@
 // 하우스 목록 화면. 25동을 구역별 카드로 묶고, 한 줄에 한 동씩 수확 후·약 후 경과 일수와 수확 중·수확 가능 배지를 보여준다.
-// 기록과 "오늘"은 props로 받는다. 이 화면은 기록이 어디서 오는지(IndexedDB 등) 모른다.
+// 머리에 "미전송 N건 · 마지막 동기화: N분 전"을 작게 보여준다 (다른 폰 기록이 안 보일 때 여기를 본다).
+// 기록, 동기화 상태, "오늘"과 지금 시각은 props로 받는다. 이 화면은 기록이 어디서 오는지(IndexedDB 등) 모른다.
 // 동 한 줄을 누르면 onSelectHouse로 그 동 번호를 알린다 (기록 입력 화면은 App이 연다).
 
 import { getHouseStatus } from '../domain/harvestCalc'
 import type { FarmRecord, House } from '../domain/types'
 import './HouseList.css'
-import { PROBLEM_TAG, formatDate } from './labels'
+import { PROBLEM_TAG, formatDate, relativeTime } from './labels'
 
 /** 경과 일수 글자. 0일이면 "오늘 수확"처럼 쓴다. 숫자는 strong으로 강조 */
 function Elapsed({ label, days }: { label: string; days: number }) {
@@ -21,10 +22,21 @@ interface Props {
   houses: readonly House[]
   records: readonly FarmRecord[]
   today: string
+  now: string // 지금 시각 (ISO 문자열). "N분 전"을 세는 데 쓴다
+  pendingCount: number // 아직 서버로 못 보낸 기록 수
+  lastSyncedAt: string | null // 마지막 동기화 시각. 한 번도 안 했으면 null
   onSelectHouse: (houseNo: number) => void
 }
 
-export default function HouseList({ houses, records, today, onSelectHouse }: Props) {
+export default function HouseList({
+  houses,
+  records,
+  today,
+  now,
+  pendingCount,
+  lastSyncedAt,
+  onSelectHouse,
+}: Props) {
   const rows = houses.map((house) => ({ house, status: getHouseStatus(records, house.no, today) }))
 
   // 수확 중인 동이 맨 앞. 그다음 수확 가능일이 이른 순 (이미 수확 가능한 동은 오래 기다린 동이 앞).
@@ -50,6 +62,15 @@ export default function HouseList({ houses, records, today, onSelectHouse }: Pro
         <p className="today">{formatDate(today)}</p>
         <h1>부추 하우스</h1>
         <p className="hint">동을 누르면 기록을 적어요</p>
+        <p className="sync-status">
+          {/* 못 보낸 기록이 있을 때만 앞에 붙인다 (주황) */}
+          {pendingCount > 0 && (
+            <>
+              <span className="sync-pending">미전송 {pendingCount}건</span> ·{' '}
+            </>
+          )}
+          {lastSyncedAt === null ? '동기화 전' : `마지막 동기화: ${relativeTime(lastSyncedAt, now)}`}
+        </p>
       </header>
 
       <p className="notice">약 친 뒤 수확은 농약 포장 표기를 확인하세요</p>

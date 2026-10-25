@@ -31,6 +31,19 @@
   color: var(--text-sub);
 }
 
+/* 동기화 상태. 평소엔 보지 않아도 되는 글자라 작고 옅게 */
+.sync-status {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* 못 보낸 기록이 있을 때만 눈에 띄게 (문제 배지와 같은 주황) */
+.sync-pending {
+  font-weight: 600;
+  color: var(--warn-strong);
+}
+
 .notice {
   margin: 0.9rem 0 0;
   padding: 0.75rem 0.9rem;

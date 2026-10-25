@@ -26,6 +26,17 @@ export function relativeDay(date: string, today: string): string {
   return `${days}일 전`
 }
 
+/** time이 now로부터 얼마나 전인지 글자로: "방금", "5분 전", "3시간 전", "2일 전" (둘 다 ISO 문자열) */
+export function relativeTime(time: string, now: string): string {
+  // 폰 시각이 바뀌어 time이 now보다 늦어도 "방금"으로 보인다
+  const minutes = Math.floor((Date.parse(now) - Date.parse(time)) / 60_000)
+  if (minutes < 1) return '방금'
+  if (minutes < 60) return `${minutes}분 전`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}시간 전`
+  return `${Math.floor(hours / 24)}일 전`
+}
+
 /** 입력한 사람의 이름. 이름 표에 없으면(아직 못 받았거나 Supabase에 안 넣음) "모르는 사람" */
 export function nameOf(profiles: readonly Profile[], userId: string): string {
   return profiles.find((p) => p.id === userId)?.name ?? '모르는 사람'

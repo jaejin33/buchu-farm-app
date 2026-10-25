@@ -2,7 +2,15 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { db, type StoredRecord } from './db'
-import { downloadNew, downloadProfiles, fromRow, uploadPending, type RecordRow } from './syncService'
+import {
+  downloadNew,
+  downloadProfiles,
+  fromRow,
+  getLastSyncedAt,
+  subscribeLastSyncedAt,
+  uploadPending,
+  type RecordRow,
+} from './syncService'
 
 // 진짜 Supabase 대신, 보낸 기록을 받아 정해 둔 답을 돌려주는 가짜를 끼운다.
 // vi.mock은 파일 맨 위로 끌어올려져 실행되므로, 안에서 쓰는 가짜 함수도 vi.hoisted로 먼저 만든다
@@ -282,6 +290,30 @@ describe('downloadNew', () => {
     await downloadNew()
 
     expect(fetchPage).not.toHaveBeenCalled()
+  })
+
+  it('끝까지 받으면 마지막 동기화 시각을 적고, 화면에 알린다', async () => {
+    const listener = vi.fn()
+    const stop = subscribeLastSyncedAt(listener)
+    fetchPage.mockResolvedValueOnce({ data: [row()], error: null })
+
+    const before = Date.now()
+    await downloadNew()
+    stop()
+
+    const synced = getLastSyncedAt()
+    expect(synced).not.toBeNull()
+    expect(Date.parse(synced ?? '')).toBeGreaterThanOrEqual(before)
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
+
+  it('받다가 에러가 나거나 인터넷이 끊겨 있으면 마지막 동기화 시각은 그대로 둔다', async () => {
+    fetchPage.mockResolvedValueOnce({ data: null, error: { code: '42501', message: 'permission denied' } })
+    await downloadNew()
+    vi.stubGlobal('navigator', { onLine: false })
+    await downloadNew()
+
+    expect(getLastSyncedAt()).toBeNull()
   })
 
   it('알 수 없는 기록은 건너뛰고 나머지는 추가한다', async () => {

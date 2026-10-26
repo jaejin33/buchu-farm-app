@@ -111,7 +111,8 @@ export interface RecordRow {
   cycle_days: number | null
   boxes: number | null
   bunches: number | null
-  problem: HouseProblem | null
+  problem: HouseProblem | 'other' | null
+  problem_name: string | null
   resolved: boolean | null
   target_id: string | null
   memo: string | null
@@ -196,9 +197,14 @@ export function fromRow(row: RecordRow): FarmRecord | null {
         ? null
         : { ...base, type: row.type, target_id: row.target_id, boxes: row.boxes, bunches: row.bunches }
     case 'problem':
-      return row.problem === null || row.resolved === null
-        ? null
-        : { ...base, type: row.type, problem: row.problem, resolved: row.resolved }
+      if (row.problem === null || row.resolved === null) return null
+      if (row.problem === 'other') {
+        // 직접 적은 문제는 이름이 꼭 있어야 한다
+        return row.problem_name === null
+          ? null
+          : { ...base, type: row.type, problem: row.problem, problem_name: row.problem_name, resolved: row.resolved }
+      }
+      return { ...base, type: row.type, problem: row.problem, resolved: row.resolved }
     case 'cancel':
       return row.target_id === null ? null : { ...base, type: row.type, target_id: row.target_id }
     default:

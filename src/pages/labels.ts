@@ -1,12 +1,20 @@
 // 여러 화면에서 같이 쓰는 표시용 글자.
 
 import { daysBetween } from '../domain/harvestCalc'
-import type { HouseProblem, Profile } from '../domain/types'
+import type { HouseProblem, Problem, Profile } from '../domain/types'
 
 // 문제 표시. 아이콘만으로는 뜻을 알기 어려워 글자를 함께 쓴다
 export const PROBLEM_TAG: Record<HouseProblem, { icon: string; label: string }> = {
   drainage: { icon: '💧', label: '배수 불량' },
   mycelium: { icon: '🍄', label: '균사 많음' },
+}
+
+/** 직접 적은 문제의 그림. 배수·균사처럼 그림 + 글자로 보여 준다 */
+const OTHER_PROBLEM_ICON = '⚠️'
+
+/** 문제를 그림과 글자로. 직접 적은 문제는 ⚠️ + 적은 이름 */
+export function problemTag(p: Problem): { icon: string; label: string } {
+  return p.kind === 'other' ? { icon: OTHER_PROBLEM_ICON, label: p.name } : PROBLEM_TAG[p.kind]
 }
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']

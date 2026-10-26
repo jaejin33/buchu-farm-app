@@ -93,9 +93,15 @@ export interface HarvestAmountRecord extends RecordBase {
 /** 하우스 문제 생김 / 해결됨. 같은 동·같은 문제는 마지막 기록을 따른다 */
 export interface ProblemRecord extends RecordBase {
   type: 'problem'
-  problem: HouseProblem
+  problem: HouseProblem | 'other' // 'other' = 배수·균사 말고 직접 적은 문제 (8단계)
+  // 직접 적은 문제 이름 (problem이 'other'일 때만, 10자까지). 이름이 같으면 같은 문제로 본다.
+  // 배수·균사 기록에는 없다
+  problem_name?: string | null
   resolved: boolean // false = 생김, true = 해결됨
 }
+
+/** 문제 하나. 정해 둔 문제(배수·균사)이거나 직접 적은 문제. 기록(ProblemRecord)에서 problemOf로 뽑는다 */
+export type Problem = { kind: HouseProblem } | { kind: 'other'; name: string }
 
 /** 기록 취소. target_id의 기록을 화면과 계산에서 뺀다 */
 export interface CancelRecord extends RecordBase {

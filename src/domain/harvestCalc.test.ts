@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activeRecords, addDays, daysBetween, getHouseStatus, lastHarvestRecord } from './harvestCalc'
+import { activeRecords, addDays, daysBetween, getHouseStatus, lastHarvestRecord, problemOf } from './harvestCalc'
 import type {
   CancelRecord,
   FarmRecord,
@@ -8,6 +8,7 @@ import type {
   HarvestRecord,
   HarvestStartRecord,
   HouseProblem,
+  Problem,
   ProblemRecord,
   SprayRecord,
   TopDressingRecord,
@@ -38,6 +39,14 @@ function problem(
 ): ProblemRecord {
   return { ...common, id, house_no, work_date, type: 'problem', problem: kind, resolved }
 }
+
+/** 직접 적은 문제 (8단계) */
+function otherProblem(id: string, house_no: number, work_date: string, name: string, resolved = false): ProblemRecord {
+  return { ...common, id, house_no, work_date, type: 'problem', problem: 'other', problem_name: name, resolved }
+}
+
+const DRAINAGE: Problem = { kind: 'drainage' }
+const MYCELIUM: Problem = { kind: 'mycelium' }
 
 function harvestAmount(id: string, house_no: number, target_id: string): HarvestAmountRecord {
   return { ...common, id, house_no, work_date: '2026-10-21', type: 'harvest_amount', target_id, boxes: 3, bunches: 5 }
@@ -343,7 +352,7 @@ describe('getHouseStatus: 문제', () => {
   })
 
   it('"생김" 기록이 있으면 그 문제가 있다', () => {
-    expect(problemsOf([problem('p', 1, '2026-10-01', 'drainage')])).toEqual(['drainage'])
+    expect(problemsOf([problem('p', 1, '2026-10-01', 'drainage')])).toEqual([DRAINAGE])
   })
 
   it('생긴 뒤 "해결됨" 기록이 있으면 없어진다', () => {
@@ -357,7 +366,7 @@ describe('getHouseStatus: 문제', () => {
       problem('p2', 1, '2026-09-20', 'drainage', true),
       problem('p3', 1, '2026-10-10', 'drainage'),
     ]
-    expect(problemsOf(records)).toEqual(['drainage'])
+    expect(problemsOf(records)).toEqual([DRAINAGE])
   })
 
   it('두 문제는 따로 판단하고, 입력 순서와 상관없이 배수 → 균사 순서로 준다', () => {
@@ -367,7 +376,7 @@ describe('getHouseStatus: 문제', () => {
       problem('d2', 1, '2026-10-05', 'drainage', true), // 배수만 해결
       problem('d3', 1, '2026-10-15', 'drainage'), // 배수 다시 생김
     ]
-    expect(problemsOf(records)).toEqual(['drainage', 'mycelium'])
+    expect(problemsOf(records)).toEqual([DRAINAGE, MYCELIUM])
   })
 
   it('한 문제가 해결돼도 다른 문제는 남는다', () => {
@@ -376,7 +385,7 @@ describe('getHouseStatus: 문제', () => {
       problem('m', 1, '2026-09-01', 'mycelium'),
       problem('m2', 1, '2026-10-01', 'mycelium', true),
     ]
-    expect(problemsOf(records)).toEqual(['drainage'])
+    expect(problemsOf(records)).toEqual([DRAINAGE])
   })
 
   it('"생김" 기록을 취소하면 없어진다', () => {
@@ -389,7 +398,7 @@ describe('getHouseStatus: 문제', () => {
       problem('p2', 1, '2026-10-10', 'drainage', true),
       cancel('c', 1, 'p2'),
     ]
-    expect(problemsOf(records)).toEqual(['drainage'])
+    expect(problemsOf(records)).toEqual([DRAINAGE])
   })
 
   it('같은 날 생김·해결됨이 둘 다 있으면 나중에 입력한 쪽을 따른다', () => {
@@ -401,12 +410,65 @@ describe('getHouseStatus: 문제', () => {
   it('다른 동의 문제는 보지 않는다', () => {
     const records = [problem('p', 2, '2026-10-01', 'mycelium')]
     expect(problemsOf(records, 1)).toEqual([])
-    expect(problemsOf(records, 2)).toEqual(['mycelium'])
+    expect(problemsOf(records, 2)).toEqual([MYCELIUM])
   })
 
   it('문제는 수확 상태에 영향을 주지 않는다', () => {
     const records: FarmRecord[] = [harvest('h', 1, '2026-09-01'), problem('p', 1, '2026-10-01', 'drainage')]
     expect(getHouseStatus(records, 1, today).kind).toBe('ready')
+  })
+})
+
+describe('getHouseStatus: 직접 적은 문제 (8단계)', () => {
+  const today = '2026-10-21'
+  const problemsOf = (records: FarmRecord[], houseNo = 1) => getHouseStatus(records, houseNo, today).problems
+
+  it('"생김"이면 있고, 같은 이름의 "해결됨"이 나중이면 없어진다', () => {
+    expect(problemsOf([otherProblem('a', 1, '2026-10-01', '진딧물')])).toEqual([{ kind: 'other', name: '진딧물' }])
+    const records = [otherProblem('a', 1, '2026-10-01', '진딧물'), otherProblem('b', 1, '2026-10-05', '진딧물', true)]
+    expect(problemsOf(records)).toEqual([])
+  })
+
+  it('이름이 다르면 다른 문제다', () => {
+    const records = [otherProblem('a', 1, '2026-10-01', '진딧물'), otherProblem('b', 1, '2026-10-05', '잎마름', true)]
+    expect(problemsOf(records)).toEqual([{ kind: 'other', name: '진딧물' }])
+  })
+
+  it('앞뒤 빈칸은 떼고 같은 이름으로 본다', () => {
+    const records = [otherProblem('a', 1, '2026-10-01', ' 진딧물'), otherProblem('b', 1, '2026-10-05', '진딧물 ', true)]
+    expect(problemsOf(records)).toEqual([])
+  })
+
+  it('배수·균사가 먼저, 직접 적은 문제는 처음 기록된 순서로 (다시 생겨도 자리는 그대로)', () => {
+    const records = [
+      otherProblem('a1', 1, '2026-09-01', '진딧물'),
+      otherProblem('b', 1, '2026-09-10', '잎마름'),
+      otherProblem('a2', 1, '2026-09-20', '진딧물', true),
+      otherProblem('a3', 1, '2026-10-01', '진딧물'), // 진딧물이 다시 생김
+      problem('m', 1, '2026-10-05', 'mycelium'),
+    ]
+    expect(problemsOf(records)).toEqual([MYCELIUM, { kind: 'other', name: '진딧물' }, { kind: 'other', name: '잎마름' }])
+  })
+
+  it('취소된 기록과 이름이 빈 기록은 무시한다', () => {
+    const records: FarmRecord[] = [
+      otherProblem('a', 1, '2026-10-01', '진딧물'),
+      cancel('c', 1, 'a'),
+      otherProblem('b', 1, '2026-10-02', '  '),
+    ]
+    expect(problemsOf(records)).toEqual([])
+  })
+})
+
+describe('problemOf', () => {
+  it('배수·균사는 종류만, 직접 적은 문제는 이름(앞뒤 빈칸 뗌)까지', () => {
+    expect(problemOf(problem('p', 1, '2026-10-01', 'drainage'))).toEqual(DRAINAGE)
+    expect(problemOf(otherProblem('o', 1, '2026-10-01', ' 진딧물 '))).toEqual({ kind: 'other', name: '진딧물' })
+  })
+
+  it('직접 적은 문제인데 이름이 비었거나 없으면 null', () => {
+    expect(problemOf(otherProblem('o', 1, '2026-10-01', ''))).toBeNull()
+    expect(problemOf({ ...otherProblem('o', 1, '2026-10-01', 'x'), problem_name: null })).toBeNull()
   })
 })
 

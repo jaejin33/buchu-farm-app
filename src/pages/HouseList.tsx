@@ -3,10 +3,10 @@
 // 기록, 동기화 상태, "오늘"과 지금 시각은 props로 받는다. 이 화면은 기록이 어디서 오는지(IndexedDB 등) 모른다.
 // 동 한 줄을 누르면 onSelectHouse로 그 동 번호를 알린다 (기록 입력 화면은 App이 연다).
 
-import { getHouseStatus } from '../domain/harvestCalc'
+import { getHouseStatus, problemKey } from '../domain/harvestCalc'
 import type { FarmRecord, House } from '../domain/types'
 import './HouseList.css'
-import { PROBLEM_TAG, formatDate, relativeTime } from './labels'
+import { formatDate, problemTag, relativeTime } from './labels'
 
 /** 경과 일수 글자. 0일이면 "오늘 수확"처럼 쓴다. 숫자는 strong으로 강조 */
 function Elapsed({ label, days }: { label: string; days: number }) {
@@ -112,8 +112,8 @@ export default function HouseList({
                     {status.problems.length > 0 && (
                       <span className="house-tags">
                         {status.problems.map((p) => (
-                          <span key={p} className="badge badge-problem">
-                            <span aria-hidden="true">{PROBLEM_TAG[p].icon}</span> {PROBLEM_TAG[p].label}
+                          <span key={problemKey(p)} className="badge badge-problem">
+                            <span aria-hidden="true">{problemTag(p).icon}</span> {problemTag(p).label}
                           </span>
                         ))}
                       </span>

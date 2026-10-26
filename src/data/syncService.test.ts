@@ -82,6 +82,7 @@ function row(fields: Partial<RecordRow> = {}): RecordRow {
     boxes: null,
     bunches: null,
     problem: null,
+    problem_name: null,
     resolved: null,
     target_id: null,
     memo: null,
@@ -374,6 +375,12 @@ describe('fromRow', () => {
       problem: 'drainage',
       resolved: false,
     })
+    expect(fromRow(row({ type: 'problem', problem: 'other', problem_name: '진딧물', resolved: false }))).toMatchObject({
+      type: 'problem',
+      problem: 'other',
+      problem_name: '진딧물',
+    })
+    expect(fromRow(row({ type: 'problem', problem: 'drainage', resolved: true }))).not.toHaveProperty('problem_name')
     expect(fromRow(row({ type: 'cancel', target_id: target }))).toMatchObject({ type: 'cancel', target_id: target })
     expect(fromRow(row({ type: 'spray', pesticide: null }))).toMatchObject({ type: 'spray', pesticide: null })
     expect(fromRow(row({ type: 'top_dressing', fertilizer: '가비료' }))).toMatchObject({
@@ -391,6 +398,7 @@ describe('fromRow', () => {
     expect(fromRow(row({ type: 'harvest', cycle_days: null }))).toBeNull()
     expect(fromRow(row({ type: 'harvest_amount', target_id: nextId(), boxes: null, bunches: 3 }))).toBeNull()
     expect(fromRow(row({ type: 'problem', problem: 'mycelium', resolved: null }))).toBeNull()
+    expect(fromRow(row({ type: 'problem', problem: 'other', problem_name: null, resolved: false }))).toBeNull()
     expect(fromRow(row({ type: 'cancel', target_id: null }))).toBeNull()
     expect(fromRow(row({ type: 'weeding' as RecordRow['type'] }))).toBeNull()
   })

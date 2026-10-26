@@ -5,10 +5,10 @@
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { DEFAULT_CYCLE_DAYS } from '../config/farm'
 import { addRecord, type NewRecord } from '../data/recordRepository'
-import { addDays, getHouseStatus, lastHarvestRecord } from '../domain/harvestCalc'
-import { fertilizerNames, latestHarvestAmount, pesticideNames } from '../domain/recordQueries'
-import type { FarmRecord, House, HouseProblem } from '../domain/types'
-import { PROBLEM_TAG, formatDate, relativeDay } from './labels'
+import { addDays, getHouseStatus, lastHarvestRecord, problemKey } from '../domain/harvestCalc'
+import { fertilizerNames, latestHarvestAmount, pesticideNames, problemNames } from '../domain/recordQueries'
+import type { FarmRecord, House, HouseProblem, Problem } from '../domain/types'
+import { PROBLEM_TAG, formatDate, problemTag, relativeDay } from './labels'
 import './RecordForm.css'
 
 /** 첫 화면에서 고르는 종류. 수확은 고른 뒤 "시작 / 완료 / 수확량"을 한 번 더 고른다 */
@@ -31,6 +31,17 @@ const HARVEST_STEP_BUTTONS: { step: HarvestStep; label: string }[] = [
 ]
 
 const PROBLEMS: HouseProblem[] = ['drainage', 'mycelium']
+
+/** 직접 적는 문제 이름의 최대 글자 수. 목록 배지가 한 줄을 넘지 않게 */
+const PROBLEM_NAME_MAX_LENGTH = 10
+
+/** 적은 문제 이름 → 문제. 배수·균사 이름("배수 불량")과 같으면 그 문제로 본다. 비었으면 null */
+function toProblem(typed: string): Problem | null {
+  const name = typed.trim()
+  if (name === '') return null
+  const preset = PROBLEMS.find((p) => PROBLEM_TAG[p].label === name)
+  return preset === undefined ? { kind: 'other', name } : { kind: preset }
+}
 
 /** 숫자만 남긴다 (최대 maxLength자리). 숫자 칸에 다른 글자가 들어가지 않게 */
 function digitsOnly(value: string, maxLength: number): string {
@@ -111,7 +122,8 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
   const [cycleDays, setCycleDays] = useState(String(DEFAULT_CYCLE_DAYS))
   const [boxes, setBoxes] = useState('')
   const [bunches, setBunches] = useState('')
-  const [problem, setProblem] = useState<HouseProblem | null>(null)
+  const [problem, setProblem] = useState<Problem | null>(null)
+  const [problemName, setProblemName] = useState('') // "다른 문제" 칸에 적은 글자
   const [resolved, setResolved] = useState<boolean | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -119,11 +131,19 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
   const dateInputRef = useRef<HTMLInputElement>(null) // 투명하게 덮어 둔 진짜 날짜 칸
 
   // 고른 뒤 새로 나타난 내용이 화면 아래(저장 버튼 뒤)에 숨지 않도록 보이는 곳까지 스크롤한다
+  // 문제는 "골랐는지"만 본다. 이름을 적을 때마다 스크롤하지 않게 (글자마다 problem이 새 값이 된다)
+  const problemChosen = problem !== null
   useEffect(() => {
     detailRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-  }, [kind, harvestStep, problem])
+  }, [kind, harvestStep, problemChosen])
 
   const currentProblems = getHouseStatus(records, house.no, today).problems
+  /** 문제 버튼: 배수·균사, 그다음 전에 직접 적은 문제 (최근 순) */
+  const problemChoices: Problem[] = [
+    ...PROBLEMS.map((kind): Problem => ({ kind })),
+    ...problemNames(records).map((name): Problem => ({ kind: 'other', name })),
+  ]
+  const isCurrent = (p: Problem) => currentProblems.some((c) => problemKey(c) === problemKey(p))
   const lastHarvest = lastHarvestRecord(records, house.no)
   const lastAmount = lastHarvest === null ? null : latestHarvestAmount(records, lastHarvest.id)
 
@@ -163,12 +183,14 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
           }
         }
         return null
-      case 'problem':
+      case 'problem': {
         if (problem === null || resolved === null) return null
-        return {
-          record: { ...base, type: 'problem', problem, resolved },
-          label: `${PROBLEM_TAG[problem].label} ${resolved ? '해결됨' : '생김'}`,
-        }
+        const record: NewRecord =
+          problem.kind === 'other'
+            ? { ...base, type: 'problem', problem: 'other', problem_name: problem.name, resolved }
+            : { ...base, type: 'problem', problem: problem.kind, resolved }
+        return { record, label: `${problemTag(problem).label} ${resolved ? '해결됨' : '생김'}` }
+      }
       default:
         return null
     }
@@ -216,9 +238,18 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
   }
 
   /** 문제를 고르면 "생김 / 해결됨"을 지금 상태의 반대로 미리 골라 둔다 (지금 있으면 해결됨, 없으면 생김) */
-  function chooseProblem(p: HouseProblem) {
+  function chooseProblem(p: Problem) {
     setProblem(p)
-    setResolved(currentProblems.includes(p))
+    setProblemName(p.kind === 'other' ? p.name : '') // 전에 적은 문제를 고르면 그 이름이 칸에도 들어간다 (약 이름과 같게)
+    setResolved(isCurrent(p))
+  }
+
+  /** "다른 문제" 칸에 적으면 그 이름이 고른 문제가 된다. 전에 적은 이름과 같으면 그 버튼이 함께 골라진다 */
+  function typeProblemName(typed: string) {
+    const p = toProblem(typed)
+    setProblemName(typed)
+    setProblem(p)
+    setResolved(p === null ? null : isCurrent(p))
   }
 
   return (
@@ -384,13 +415,29 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
         {kind === 'problem' && (
           <section className="form-card" ref={detailRef}>
             <div className="choices">
-              {PROBLEMS.map((p) => (
-                <Choice key={p} selected={problem === p} onClick={() => chooseProblem(p)}>
-                  <span aria-hidden="true">{PROBLEM_TAG[p].icon}</span> {PROBLEM_TAG[p].label}
-                  <small>{currentProblems.includes(p) ? '지금 있음' : '지금 없음'}</small>
+              {problemChoices.map((p) => (
+                <Choice
+                  key={problemKey(p)}
+                  selected={problem !== null && problemKey(problem) === problemKey(p)}
+                  onClick={() => chooseProblem(p)}
+                >
+                  <span aria-hidden="true">{problemTag(p).icon}</span> {problemTag(p).label}
+                  <small>{isCurrent(p) ? '지금 있음' : '지금 없음'}</small>
                 </Choice>
               ))}
             </div>
+            <label className="field-label" htmlFor="problem-name">
+              다른 문제 <span className="field-hint">({PROBLEM_NAME_MAX_LENGTH}자까지)</span>
+            </label>
+            <input
+              id="problem-name"
+              className="text-input"
+              type="text"
+              maxLength={PROBLEM_NAME_MAX_LENGTH}
+              placeholder="처음 생긴 문제면 적어 주세요"
+              value={problemName}
+              onChange={(e) => typeProblemName(e.target.value)}
+            />
             {problem !== null && (
               <div className="choices">
                 <Choice selected={resolved === false} onClick={() => setResolved(false)}>

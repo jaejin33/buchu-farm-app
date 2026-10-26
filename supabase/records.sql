@@ -13,7 +13,8 @@ create table public.records (
   cycle_days   int,                    -- harvest
   boxes        int,                    -- harvest_amount
   bunches      int,                    -- harvest_amount
-  problem      text check (problem in ('drainage','mycelium')),  -- problem
+  problem      text check (problem in ('drainage','mycelium','other')),  -- problem ('other'는 8단계에 더함)
+  problem_name text,                   -- problem이 'other'일 때 직접 적은 이름 (8단계, records-problem-name.sql)
   resolved     boolean,                -- problem
   target_id    uuid,                   -- cancel, harvest_amount
   memo         text,
@@ -32,7 +33,7 @@ create index records_received_at_idx on public.records (received_at);
 revoke all on public.records from anon, authenticated;
 grant select on public.records to authenticated;
 grant insert (id, house_no, work_date, type, pesticide, fertilizer, cycle_days, boxes, bunches,
-              problem, resolved, target_id, memo, recorded_by, recorded_at)
+              problem, problem_name, resolved, target_id, memo, recorded_by, recorded_at)
   on public.records to authenticated;
 
 -- ---- 권한 2: 줄 단위로 어떤 기록에 할 수 있나 (RLS) ----

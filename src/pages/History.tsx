@@ -4,10 +4,11 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { addRecord } from '../data/recordRepository'
+import { problemOf } from '../domain/harvestCalc'
 import { houseHistory, latestHarvestAmount } from '../domain/recordQueries'
 import type { FarmRecord, House, Profile } from '../domain/types'
 import './History.css'
-import { PROBLEM_TAG, formatDate, nameOf, relativeDay } from './labels'
+import { formatDate, nameOf, problemTag, relativeDay } from './labels'
 
 /** 이력 한 줄의 글자: 무엇(title), 자세한 내용(detail), 아랫줄 설명(note) */
 function describe(
@@ -34,11 +35,12 @@ function describe(
         note: target === undefined ? undefined : `${formatDate(target.work_date)} 수확분`,
       }
     }
-    case 'problem':
-      return {
-        title: `${PROBLEM_TAG[r.problem].icon} ${PROBLEM_TAG[r.problem].label}`,
-        detail: r.resolved ? '해결됨' : '생김',
-      }
+    case 'problem': {
+      const problem = problemOf(r)
+      // 직접 적은 문제인데 이름이 빈 기록은 앱에서 만들지 않지만, 혹시 있으면 "문제"로 보여 준다
+      const tag = problem === null ? { icon: '⚠️', label: '문제' } : problemTag(problem)
+      return { title: `${tag.icon} ${tag.label}`, detail: r.resolved ? '해결됨' : '생김' }
+    }
     case 'cancel':
       return { title: '취소', detail: null } // 이력에는 나오지 않는다 (houseHistory가 뺌)
   }

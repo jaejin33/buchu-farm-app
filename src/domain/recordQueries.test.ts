@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fertilizerNames, houseHistory, latestHarvestAmount, pesticideNames } from './recordQueries'
+import { fertilizerNames, houseHistory, latestHarvestAmount, pesticideNames, problemNames } from './recordQueries'
 import type {
   CancelRecord,
   FarmRecord,
@@ -19,6 +19,10 @@ function spray(id: string, work_date: string, pesticide: string | null): SprayRe
 
 function fertilizer(id: string, type: FertilizerType, work_date: string, name: string | null): FarmRecord {
   return { ...common, id, work_date, type, fertilizer: name }
+}
+
+function otherProblem(id: string, work_date: string, name: string, resolved = false): FarmRecord {
+  return { ...common, id, work_date, type: 'problem', problem: 'other', problem_name: name, resolved }
 }
 
 function harvest(id: string, work_date: string): HarvestRecord {
@@ -95,6 +99,28 @@ describe('fertilizerNames', () => {
       fertilizer('e', 'top_dressing', '2026-10-04', ' 가비료 '),
     ]
     expect(fertilizerNames(records, 'top_dressing')).toEqual(['가비료'])
+  })
+})
+
+// ---- 직접 적은 문제 이름 목록 ----
+
+describe('problemNames', () => {
+  it('직접 적은 문제 이름을 최근 순으로, 해결된 것과 다른 동 것도 모은다', () => {
+    const records: FarmRecord[] = [
+      otherProblem('a', '2026-10-01', '진딧물'),
+      { ...otherProblem('b', '2026-10-03', '잎마름', true), house_no: 7 },
+      otherProblem('c', '2026-10-02', '진딧물', true),
+    ]
+    expect(problemNames(records)).toEqual(['잎마름', '진딧물'])
+  })
+
+  it('배수·균사와 취소된 기록은 넣지 않는다', () => {
+    const records: FarmRecord[] = [
+      { ...common, id: 'd', work_date: '2026-10-01', type: 'problem', problem: 'drainage', resolved: false },
+      otherProblem('a', '2026-10-02', '잘못적은문제'),
+      cancel('c', 'a'),
+    ]
+    expect(problemNames(records)).toEqual([])
   })
 })
 

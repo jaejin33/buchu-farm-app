@@ -20,6 +20,14 @@ export function fertilizerNames(records: readonly FarmRecord[], type: Fertilizer
 }
 
 /**
+ * 직접 적은 문제 이름 목록. 취소되지 않은 문제 기록(모든 동, 해결된 것 포함)에서 모은다 (순서는 recentNames).
+ * 문제 입력 화면에서 배수·균사 버튼 옆에 버튼으로 보여 준다
+ */
+export function problemNames(records: readonly FarmRecord[]): string[] {
+  return recentNames(records, (r) => (r.type === 'problem' && r.problem === 'other' ? r.problem_name : null))
+}
+
+/**
  * 취소되지 않은 기록에서 nameOf로 뽑은 이름을 모은다.
  * 최근 기록의 이름이 앞에 오고, 같은 이름은 한 번만 나온다. 이름을 안 적은 기록은 건너뛴다
  */

@@ -2,7 +2,7 @@
 // 취소된 기록은 harvestCalc의 activeRecords로 걸러 낸 뒤 계산한다.
 
 import { activeRecords, isLater } from './harvestCalc'
-import type { FarmRecord, FertilizerType, HarvestAmountRecord } from './types'
+import type { AmountType, FarmRecord, FertilizerType, HarvestAmountRecord } from './types'
 
 /** 약 목록. 취소되지 않은 약 기록의 약 이름을 모은다 (순서는 recentNames) */
 export function pesticideNames(records: readonly FarmRecord[]): string[] {
@@ -10,13 +10,47 @@ export function pesticideNames(records: readonly FarmRecord[]): string[] {
 }
 
 /**
- * 비료 목록. 취소되지 않은 웃거름(또는 관비) 기록의 비료 이름을 모은다 (순서는 recentNames).
- * 웃거름과 관비는 따로 모은다. 뿌리는 비료와 물에 타는 비료가 한 목록에 섞이지 않게
+ * 비료 목록. 취소되지 않은 비료(웃거름) 또는 관비 기록의 비료 이름을 모은다 (순서는 recentNames).
+ * 비료(웃거름)와 관비는 따로 모은다. 뿌리는 비료와 물에 타는 비료가 한 목록에 섞이지 않게
  */
 export function fertilizerNames(records: readonly FarmRecord[], type: FertilizerType): string[] {
   return recentNames(records, (r) =>
     (r.type === 'top_dressing' || r.type === 'fertigation') && r.type === type ? r.fertilizer : null,
   )
+}
+
+/**
+ * 그 이름(약·비료)으로 마지막에 적은 양. 약·관비는 ml, 비료(웃거름)는 포.
+ * 지난 이름을 고르면 이 양을 미리 채운다 (같은 약·비료는 보통 같은 양을 쓴다).
+ * 취소되지 않은 type 기록 중 양을 적은 것만 본다 (모든 동). 없으면 null
+ */
+export function lastUsedAmount(records: readonly FarmRecord[], type: AmountType, name: string): number | null {
+  let latest: FarmRecord | null = null
+  let latestAmount: number | null = null
+  for (const r of activeRecords(records)) {
+    if (r.type !== type) continue
+    const amount = amountOf(r)
+    if (amount === null || nameOfAmount(r)?.trim() !== name.trim()) continue
+    if (latest === null || isLater(r, latest)) {
+      latest = r
+      latestAmount = amount
+    }
+  }
+  return latestAmount
+}
+
+/** 기록에 적은 양. 양을 적는 종류가 아니거나 안 적었으면 null */
+function amountOf(r: FarmRecord): number | null {
+  if (r.type === 'spray' || r.type === 'fertigation') return r.amount_ml ?? null
+  if (r.type === 'top_dressing') return r.bags ?? null
+  return null
+}
+
+/** 양을 적는 기록의 이름 (약 이름 또는 비료 이름) */
+function nameOfAmount(r: FarmRecord): string | null | undefined {
+  if (r.type === 'spray') return r.pesticide
+  if (r.type === 'top_dressing' || r.type === 'fertigation') return r.fertilizer
+  return null
 }
 
 /**

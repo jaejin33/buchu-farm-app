@@ -6,9 +6,9 @@ import { useEffect, useRef, useState, type FormEvent, type MouseEvent, type Reac
 import { DEFAULT_CYCLE_DAYS } from '../config/farm'
 import { addRecord, type NewRecord } from '../data/recordRepository'
 import { addDays, getHouseStatus, lastHarvestRecord, problemKey } from '../domain/harvestCalc'
-import { fertilizerNames, latestHarvestAmount, pesticideNames, problemNames } from '../domain/recordQueries'
-import type { FarmRecord, House, HouseProblem, Problem } from '../domain/types'
-import { PROBLEM_TAG, formatDate, problemTag, relativeDay } from './labels'
+import { fertilizerNames, lastUsedAmount, latestHarvestAmount, pesticideNames, problemNames } from '../domain/recordQueries'
+import type { AmountType, FarmRecord, House, HouseProblem, Problem } from '../domain/types'
+import { PROBLEM_TAG, formatBags, formatDate, problemTag, relativeDay } from './labels'
 import './RecordForm.css'
 
 /** 첫 화면에서 고르는 종류. 수확은 고른 뒤 "시작 / 완료 / 수확량"을 한 번 더 고른다 */
@@ -17,7 +17,7 @@ type HarvestStep = 'harvest_start' | 'harvest' | 'harvest_amount'
 
 const KIND_BUTTONS: { kind: Kind; label: string }[] = [
   { kind: 'spray', label: '약' },
-  { kind: 'top_dressing', label: '웃거름' },
+  { kind: 'top_dressing', label: '비료' }, // 9단계 전에는 "웃거름". 기록 종류(top_dressing)는 그대로
   { kind: 'fertigation', label: '관비' },
   { kind: 'harvest', label: '수확' },
   { kind: 'problem', label: '문제' },
@@ -48,6 +48,22 @@ function digitsOnly(value: string, maxLength: number): string {
   return value.replace(/\D/g, '').slice(0, maxLength)
 }
 
+/** 소수점 아래 한 자리까지의 숫자만 남긴다 (정수 부분은 최대 maxLength자리). "1.5"처럼. 쉼표는 소수점으로 본다 */
+function decimalOnly(value: string, maxLength: number): string {
+  const [whole, ...rest] = value.replace(',', '.').replace(/[^\d.]/g, '').split('.')
+  const int = whole.slice(0, maxLength)
+  return rest.length === 0 ? int : `${int}.${rest.join('').slice(0, 1)}`
+}
+
+/** 적은 양 → 숫자. 비었거나 0이면 null (안 적은 것으로 본다) */
+function toAmount(typed: string): number | null {
+  const n = Number(typed)
+  return typed === '' || !Number.isFinite(n) || n <= 0 ? null : n
+}
+
+/** 비료 포 수 버튼. 이보다 많으면 칸에 적는다 */
+const BAG_CHOICES = [0.5, 1, 2, 3]
+
 /** 고르는 버튼. 고른 것은 초록 테두리. aria-pressed로 화면 읽기 기능에도 "선택됨"을 알린다 */
 function Choice({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: ReactNode }) {
   return (
@@ -59,7 +75,8 @@ function Choice({ selected, onClick, children }: { selected: boolean; onClick: (
 
 /**
  * 약·비료 이름 고르기·적기 (안 적어도 된다). 지난 기록의 이름(known)은 버튼으로 고르고, 다시 누르면 풀린다.
- * 처음 쓰는 이름은 아래 칸에 적는다
+ * 처음 쓰는 이름은 아래 칸에 적는다.
+ * 버튼으로 고르면 onPick(풀면 ''), 칸에 적으면 onChange를 부른다 (고를 때만 양을 미리 채우려고 나눈다)
  */
 function NamePicker({
   id,
@@ -68,6 +85,7 @@ function NamePicker({
   firstTimeHint,
   value,
   onChange,
+  onPick,
 }: {
   id: string
   what: string // "약", "비료"
@@ -75,6 +93,7 @@ function NamePicker({
   firstTimeHint: string // 고를 이름이 있을 때 적는 칸의 안내 글자
   value: string
   onChange: (value: string) => void
+  onPick: (name: string) => void
 }) {
   return (
     <>
@@ -84,7 +103,7 @@ function NamePicker({
       {known.length > 0 && (
         <div className="chips">
           {known.map((name) => (
-            <Choice key={name} selected={value.trim() === name} onClick={() => onChange(value.trim() === name ? '' : name)}>
+            <Choice key={name} selected={value.trim() === name} onClick={() => onPick(value.trim() === name ? '' : name)}>
               {name}
             </Choice>
           ))}
@@ -98,6 +117,62 @@ function NamePicker({
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
+    </>
+  )
+}
+
+/** ml 적기 (정수, 안 적어도 된다): [ 20 ] ml */
+function MlField({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <>
+      <label className="field-label" htmlFor={id}>
+        {label} <span className="field-hint">(안 적어도 돼요)</span>
+      </label>
+      <div className="amounts">
+        <label>
+          <input
+            id={id}
+            className="text-input"
+            inputMode="numeric"
+            placeholder="0"
+            value={value}
+            onChange={(e) => onChange(digitsOnly(e.target.value, 5))}
+          />
+          ml
+        </label>
+      </div>
+    </>
+  )
+}
+
+/** 비료 포 수 (소수도, 안 적어도 된다). [반 포][1포][2포][3포]를 누르거나, 그보다 많으면 칸에 적는다 */
+function BagsField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const bags = toAmount(value)
+  return (
+    <>
+      <label className="field-label" htmlFor="bags">
+        양 <span className="field-hint">(안 적어도 돼요)</span>
+      </label>
+      <div className="choices choices-4">
+        {BAG_CHOICES.map((n) => (
+          <Choice key={n} selected={bags === n} onClick={() => onChange(bags === n ? '' : String(n))}>
+            {formatBags(n)}
+          </Choice>
+        ))}
+      </div>
+      <div className="amounts">
+        <label>
+          <input
+            id="bags"
+            className="text-input"
+            inputMode="decimal"
+            placeholder="다른 양"
+            value={value}
+            onChange={(e) => onChange(decimalOnly(e.target.value, 3))}
+          />
+          포
+        </label>
+      </div>
     </>
   )
 }
@@ -118,6 +193,7 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
   const [kind, setKind] = useState<Kind | null>(null)
   const [pesticide, setPesticide] = useState('')
   const [fertilizer, setFertilizer] = useState('')
+  const [amount, setAmount] = useState('') // 약·관비는 ml, 비료는 포. 종류를 바꾸면 비운다 (단위가 달라서)
   const [harvestStep, setHarvestStep] = useState<HarvestStep | null>(null)
   const [cycleDays, setCycleDays] = useState(String(DEFAULT_CYCLE_DAYS))
   const [boxes, setBoxes] = useState('')
@@ -158,16 +234,28 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
     if (!dateOk) return null
     const base = { house_no: house.no, work_date: workDate, memo: null }
 
+    const used = toAmount(amount)
     switch (kind) {
       case 'spray': {
         const name = pesticide.trim()
-        return { record: { ...base, type: 'spray', pesticide: name || null }, label: name ? `약(${name})` : '약' }
+        return {
+          record: { ...base, type: 'spray', pesticide: name || null, amount_ml: used },
+          label: name ? `약(${name})` : '약',
+        }
       }
-      case 'top_dressing':
+      case 'top_dressing': {
+        const name = fertilizer.trim()
+        return {
+          record: { ...base, type: 'top_dressing', fertilizer: name || null, bags: used },
+          label: name ? `비료(${name})` : '비료',
+        }
+      }
       case 'fertigation': {
         const name = fertilizer.trim()
-        const what = kind === 'top_dressing' ? '웃거름' : '관비'
-        return { record: { ...base, type: kind, fertilizer: name || null }, label: name ? `${what}(${name})` : what }
+        return {
+          record: { ...base, type: 'fertigation', fertilizer: name || null, amount_ml: used },
+          label: name ? `관비(${name})` : '관비',
+        }
       }
       case 'harvest':
         if (harvestStep === 'harvest_start') {
@@ -231,10 +319,27 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
     }
   }
 
-  /** 종류를 고른다. 다른 종류로 바꾸면 적던 비료 이름은 비운다 (웃거름 비료가 관비 기록에 들어가지 않게) */
+  /**
+   * 종류를 고른다. 다른 종류로 바꾸면 적던 비료 이름과 양은 비운다
+   * (비료 이름이 관비 기록에 들어가지 않게, 약 ml가 비료 포 수로 들어가지 않게)
+   */
   function chooseKind(k: Kind) {
-    if (k !== kind) setFertilizer('')
+    if (k !== kind) {
+      setFertilizer('')
+      setAmount('')
+    }
     setKind(k)
+  }
+
+  /**
+   * 지난 약·비료 이름을 버튼으로 고른다. 그 이름으로 마지막에 적은 양을 미리 채운다 (적은 적이 없으면 비운다).
+   * 고른 이름을 풀면(name = '') 양은 그대로 둔다
+   */
+  function pickName(type: AmountType, name: string, setName: (name: string) => void) {
+    setName(name)
+    if (name === '') return
+    const last = lastUsedAmount(records, type, name)
+    setAmount(last === null ? '' : String(last))
   }
 
   /** 문제를 고르면 "생김 / 해결됨"을 지금 상태의 반대로 미리 골라 둔다 (지금 있으면 해결됨, 없으면 생김) */
@@ -312,7 +417,9 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
               firstTimeHint="처음 치는 약이면 적어 주세요"
               value={pesticide}
               onChange={setPesticide}
+              onPick={(name) => pickName('spray', name, setPesticide)}
             />
+            <MlField id="amount-ml" label="원액 양" value={amount} onChange={setAmount} />
           </section>
         )}
 
@@ -325,7 +432,13 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
               firstTimeHint="처음 쓰는 비료면 적어 주세요"
               value={fertilizer}
               onChange={setFertilizer}
+              onPick={(name) => pickName(kind, name, setFertilizer)}
             />
+            {kind === 'top_dressing' ? (
+              <BagsField value={amount} onChange={setAmount} />
+            ) : (
+              <MlField id="amount-ml" label="양" value={amount} onChange={setAmount} />
+            )}
           </section>
         )}
 

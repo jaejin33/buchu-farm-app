@@ -47,7 +47,8 @@ const DUPLICATE = { error: { code: '23505', message: 'duplicate key value violat
 const REJECTED = { error: { code: '42501', message: 'new row violates row-level security policy' } }
 const USER_A = '22222222-2222-4222-8222-222222222222'
 const USER_B = '33333333-3333-4333-8333-333333333333'
-const LAST_RECEIVED_KEY = 'buchu-farm:last-received-at'
+const LAST_RECEIVED_KEY = 'buchu-farm:last-received-at:2'
+const OLD_LAST_RECEIVED_KEY = 'buchu-farm:last-received-at' // 9단계 전 버전이 쓰던 이름
 
 let nextNo = 1
 /** 기록 id (끝자리만 다르게) */
@@ -78,6 +79,8 @@ function row(fields: Partial<RecordRow> = {}): RecordRow {
     type: 'top_dressing',
     pesticide: null,
     fertilizer: null,
+    amount_ml: null,
+    bags: null,
     cycle_days: null,
     boxes: null,
     bunches: null,
@@ -214,7 +217,7 @@ describe('uploadPending', () => {
 
 describe('downloadNew', () => {
   it('처음에는 처음부터 받아, 폰에 보낸 기록(synced = 1)으로 추가한다', async () => {
-    const r = row({ type: 'spray', pesticide: '가약' })
+    const r = row({ type: 'spray', pesticide: '가약', amount_ml: 20 })
     fetchPage.mockResolvedValueOnce({ data: [r], error: null })
 
     await downloadNew()
@@ -226,6 +229,7 @@ describe('downloadNew', () => {
       house_no: 3,
       work_date: '2026-10-23',
       pesticide: '가약',
+      amount_ml: 20,
       memo: null,
       recorded_by: USER_B,
       recorded_at: '2026-10-23T01:00:00.500Z', // 폰에서 만든 기록과 같은 모양으로
@@ -242,7 +246,15 @@ describe('downloadNew', () => {
     expect(gte).toHaveBeenCalledWith('received_at', '2026-10-23T01:05:00.000Z')
   })
 
-  it('폰에 이미 있는 기록은 건드리지 않는다 (아직 안 보낸 내 기록도 그대로)', async () => {
+  it('9단계 전 버전이 적어 둔 시각은 쓰지 않고 처음부터 다시 받는다', async () => {
+    localStorage.setItem(OLD_LAST_RECEIVED_KEY, '2026-10-23T01:10:00.000+00:00')
+
+    await downloadNew()
+
+    expect(gte).not.toHaveBeenCalled()
+  })
+
+  it('폰에 있는 아직 안 보낸 기록은 건드리지 않는다', async () => {
     const mine = stored(0)
     await db.records.add(mine)
     const same = row({ id: mine.id, house_no: 9, recorded_by: USER_A })
@@ -254,6 +266,21 @@ describe('downloadNew', () => {
     expect(await db.records.get(mine.id)).toEqual(mine)
     expect(await syncedOf(other.id)).toBe(1)
     expect(await db.records.count()).toBe(2)
+  })
+
+  it('폰에 있는 보낸 기록은 서버 것으로 바꾼다 (옛 버전이 빼 둔 칸이 채워진다)', async () => {
+    // 옛 버전이 받아 둔 비료 기록: 포 수 칸을 몰라서 빼고 저장했다
+    const old = stored(1)
+    await db.records.add(old)
+    fetchPage.mockResolvedValueOnce({
+      data: [row({ id: old.id, house_no: 1, recorded_by: USER_A, fertilizer: '가비료', bags: 1.5 })],
+      error: null,
+    })
+
+    await downloadNew()
+
+    expect(await db.records.get(old.id)).toMatchObject({ fertilizer: '가비료', bags: 1.5, synced: 1 })
+    expect(await db.records.count()).toBe(1)
   })
 
   it('한 번에 1000건씩 끊어 받고, 1000건보다 적게 오면 멈춘다', async () => {
@@ -382,15 +409,25 @@ describe('fromRow', () => {
     })
     expect(fromRow(row({ type: 'problem', problem: 'drainage', resolved: true }))).not.toHaveProperty('problem_name')
     expect(fromRow(row({ type: 'cancel', target_id: target }))).toMatchObject({ type: 'cancel', target_id: target })
-    expect(fromRow(row({ type: 'spray', pesticide: null }))).toMatchObject({ type: 'spray', pesticide: null })
-    expect(fromRow(row({ type: 'top_dressing', fertilizer: '가비료' }))).toMatchObject({
+    expect(fromRow(row({ type: 'spray', pesticide: null }))).toMatchObject({
+      type: 'spray',
+      pesticide: null,
+      amount_ml: null,
+    })
+    expect(fromRow(row({ type: 'top_dressing', fertilizer: '가비료', bags: 0.5 }))).toMatchObject({
       type: 'top_dressing',
       fertilizer: '가비료',
+      bags: 0.5,
     })
-    expect(fromRow(row({ type: 'fertigation', fertilizer: null }))).toMatchObject({ type: 'fertigation', fertilizer: null })
+    expect(fromRow(row({ type: 'fertigation', fertilizer: null, amount_ml: 300 }))).toMatchObject({
+      type: 'fertigation',
+      fertilizer: null,
+      amount_ml: 300,
+    })
 
     const topDressing = fromRow(row({ type: 'top_dressing' }))
     expect(topDressing).not.toHaveProperty('pesticide')
+    expect(topDressing).not.toHaveProperty('amount_ml') // 비료는 포 수만
     expect(topDressing).not.toHaveProperty('received_at') // 서버에서만 쓰는 칸
   })
 

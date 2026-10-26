@@ -8,7 +8,7 @@ import { problemOf } from '../domain/harvestCalc'
 import { houseHistory, latestHarvestAmount } from '../domain/recordQueries'
 import type { FarmRecord, House, Profile } from '../domain/types'
 import './History.css'
-import { formatDate, nameOf, problemTag, relativeDay } from './labels'
+import { formatBags, formatDate, formatMl, nameOf, problemTag, relativeDay } from './labels'
 
 /** 이력 한 줄의 글자: 무엇(title), 자세한 내용(detail), 아랫줄 설명(note) */
 function describe(
@@ -17,11 +17,12 @@ function describe(
 ): { title: string; detail: string | null; note?: string } {
   switch (r.type) {
     case 'spray':
-      return { title: '약', detail: r.pesticide }
+      return { title: '약', detail: joinDetail(r.pesticide, r.amount_ml, formatMl) }
     case 'top_dressing':
-      return { title: '웃거름', detail: r.fertilizer ?? null }
+      // 9단계 전에는 "웃거름"이라 불렀다. 지난 기록도 "비료"로 보인다
+      return { title: '비료', detail: joinDetail(r.fertilizer, r.bags, formatBags) }
     case 'fertigation':
-      return { title: '관비', detail: r.fertilizer ?? null }
+      return { title: '관비', detail: joinDetail(r.fertilizer, r.amount_ml, formatMl) }
     case 'harvest_start':
       return { title: '수확 시작', detail: null }
     case 'harvest':
@@ -44,6 +45,21 @@ function describe(
     case 'cancel':
       return { title: '취소', detail: null } // 이력에는 나오지 않는다 (houseHistory가 뺌)
   }
+}
+
+/**
+ * 이름과 양을 한 줄로: "가약 20ml", 이름만 "가약", 양만 "20ml". 둘 다 없으면 null.
+ * 안 적었으면 null이고, 그 항목이 생기기 전(7·9단계 전) 기록에는 항목이 아예 없다(undefined)
+ */
+function joinDetail(
+  name: string | null | undefined,
+  amount: number | null | undefined,
+  format: (amount: number) => string,
+): string | null {
+  const parts: string[] = []
+  if (name) parts.push(name)
+  if (amount !== null && amount !== undefined) parts.push(format(amount))
+  return parts.length === 0 ? null : parts.join(' ')
 }
 
 /** 최근 순으로 줄 선 기록을 작업 날짜별로 묶는다. 순서는 그대로 */

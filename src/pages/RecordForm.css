@@ -123,6 +123,11 @@
   grid-template-columns: 1fr 1fr 1fr;
 }
 
+/* 비료 포 수 [반 포][1포][2포][3포]: 글자가 짧아 한 줄에 넷 */
+.choices-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
 /* 약 목록: 이름 길이가 제각각이라 줄 맞춤 없이 흘려 놓는다 */
 .chips {
   display: flex;

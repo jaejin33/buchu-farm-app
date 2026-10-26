@@ -50,23 +50,30 @@ interface RecordBase {
 export interface SprayRecord extends RecordBase {
   type: 'spray'
   pesticide: string | null // 약 이름. 안 적어도 된다 (null). 지난 약 기록의 이름을 모아 약 목록을 만든다
+  // 한 동에 쓴 약 원액 양(ml, 정수). 안 적어도 된다 (null). 9단계 전에 저장한 기록에는 이 항목이 없다 (양 없음으로 본다)
+  amount_ml?: number | null
 }
 
-/** 웃거름 */
+/** 비료 (웃거름). 화면에는 9단계부터 "비료"로 쓴다. type 값은 지난 기록과 맞추려고 그대로 둔다 */
 export interface TopDressingRecord extends RecordBase {
   type: 'top_dressing'
   // 비료 이름. 약 이름처럼 안 적어도 된다 (null). 7단계 전에 저장한 기록에는 이 항목이 없다 (이름 없음으로 본다)
   fertilizer?: string | null
+  bags?: number | null // 한 동에 준 포 수 (0.5포처럼 소수도). 안 적어도 된다 (null). 9단계 전 기록에는 없다
 }
 
 /** 관비 */
 export interface FertigationRecord extends RecordBase {
   type: 'fertigation'
-  fertilizer?: string | null // 비료 이름. 웃거름과 같다
+  fertilizer?: string | null // 비료 이름. 비료(웃거름)와 같다
+  amount_ml?: number | null // 한 동에 쓴 양(ml, 정수). 약과 같다
 }
 
 /** 비료 이름을 적는 기록 종류 */
 export type FertilizerType = 'top_dressing' | 'fertigation'
+
+/** 쓴 양을 적는 기록 종류. 약·관비는 ml, 비료(웃거름)는 포 */
+export type AmountType = 'spray' | FertilizerType
 
 /** 수확 시작. 한 동을 하루에 다 못 벨 때 누른다. 다음 수확 완료 기록까지 "수확 중"이다 */
 export interface HarvestStartRecord extends RecordBase {

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { fertilizerNames, houseHistory, latestHarvestAmount, pesticideNames, problemNames } from './recordQueries'
+import {
+  fertilizerNames,
+  houseHistory,
+  lastUsedAmount,
+  latestHarvestAmount,
+  pesticideNames,
+  problemNames,
+} from './recordQueries'
 import type {
   CancelRecord,
   FarmRecord,
@@ -99,6 +106,47 @@ describe('fertilizerNames', () => {
       fertilizer('e', 'top_dressing', '2026-10-04', ' 가비료 '),
     ]
     expect(fertilizerNames(records, 'top_dressing')).toEqual(['가비료'])
+  })
+})
+
+// ---- 마지막에 적은 양 ----
+
+describe('lastUsedAmount', () => {
+  it('그 이름으로 마지막에 적은 양 (모든 동)', () => {
+    const records: FarmRecord[] = [
+      { ...spray('a', '2026-10-01', '가약'), amount_ml: 20 },
+      { ...spray('b', '2026-10-10', '가약'), house_no: 7, amount_ml: 30 },
+      { ...spray('c', '2026-10-05', '가약'), amount_ml: 25 },
+    ]
+    expect(lastUsedAmount(records, 'spray', '가약')).toBe(30)
+  })
+
+  it('양을 안 적은 기록, 다른 이름, 다른 종류, 취소된 기록은 건너뛴다', () => {
+    const records: FarmRecord[] = [
+      { ...spray('a', '2026-10-01', '가약'), amount_ml: 20 },
+      { ...spray('b', '2026-10-02', '가약'), amount_ml: null },
+      spray('c', '2026-10-03', '가약'), // 9단계 전 기록 (양 칸이 없음)
+      { ...spray('d', '2026-10-04', '나약'), amount_ml: 50 },
+      { ...spray('e', '2026-10-05', '가약'), amount_ml: 99 },
+      cancel('x', 'e'),
+      { ...fertilizer('f', 'fertigation', '2026-10-06', '가약'), amount_ml: 70 } as FarmRecord,
+    ]
+    expect(lastUsedAmount(records, 'spray', '가약')).toBe(20)
+  })
+
+  it('비료(웃거름)는 포 수, 관비는 ml', () => {
+    const records: FarmRecord[] = [
+      { ...fertilizer('a', 'top_dressing', '2026-10-01', '가비료'), bags: 1.5 } as FarmRecord,
+      { ...fertilizer('b', 'fertigation', '2026-10-01', '가비료'), amount_ml: 300 } as FarmRecord,
+    ]
+    expect(lastUsedAmount(records, 'top_dressing', '가비료')).toBe(1.5)
+    expect(lastUsedAmount(records, 'fertigation', '가비료')).toBe(300)
+  })
+
+  it('앞뒤 빈칸은 떼고 같은 이름으로 본다. 적은 양이 없으면 null', () => {
+    const records: FarmRecord[] = [{ ...spray('a', '2026-10-01', ' 가약 '), amount_ml: 20 }]
+    expect(lastUsedAmount(records, 'spray', '가약')).toBe(20)
+    expect(lastUsedAmount(records, 'spray', '나약')).toBeNull()
   })
 })
 

@@ -1,6 +1,7 @@
 // 동기화: 폰(IndexedDB)과 Supabase 사이에서 기록을 주고받는다.
 // - 올리기(6-4): 폰에서 저장한 기록 중 아직 안 보낸 것(synced = 0)을 서버로
-// - 내려받기(6-5): 서버에 새로 들어온 기록(다른 폰에서 올린 것) 중 폰에 없는 것을 폰으로
+// - 내려받기(6-5): 서버에 새로 들어온 기록(다른 폰에서 올린 것) 중 폰에 없는 것을 폰으로.
+//   폰에 이미 있는 보낸 기록은 서버 것으로 바꾼다 (옛 버전이 빼 둔 칸을 채우려고, 9단계)
 // - 이름 받기(6-6): 사람 이름 표(profiles)를 통째로 폰으로
 // 화면은 항상 IndexedDB를 기준으로 그리므로, 주고받기가 실패해도 화면과 입력은 그대로 동작한다.
 // 실패하면 다음 기회(저장 직후, 인터넷 재연결, 앱 실행, 앱 화면으로 돌아옴)에 다시 한다
@@ -13,8 +14,12 @@ import { getSupabase } from './supabase'
 /** PostgreSQL 에러 코드: 같은 기본 키(id)가 이미 있음 */
 const DUPLICATE_KEY = '23505'
 
-/** 마지막으로 받은 기록의 서버 시각(received_at). 다음 내려받기는 이 시각 근처부터 가져온다 */
-const LAST_RECEIVED_KEY = 'buchu-farm:last-received-at'
+/**
+ * 마지막으로 받은 기록의 서버 시각(received_at). 다음 내려받기는 이 시각 근처부터 가져온다.
+ * 이름 끝 숫자는 "기록 모양" 번호다. 기록에 새 칸을 더하면 숫자를 올린다. 그러면 새 버전은 이 값을 못 찾아
+ * 처음부터 다시 받고, 옛 버전이 새 칸을 모르고 저장해 둔 기록(9단계 ml·포, 7단계 비료 이름)을 서버 것으로 바꾼다 (9단계)
+ */
+const LAST_RECEIVED_KEY = 'buchu-farm:last-received-at:2'
 
 /**
  * 내려받을 때 마지막으로 받은 시각보다 이만큼 앞부터 다시 가져온다.
@@ -108,6 +113,8 @@ export interface RecordRow {
   type: RecordType
   pesticide: string | null
   fertilizer: string | null
+  amount_ml: number | null
+  bags: number | null
   cycle_days: number | null
   boxes: number | null
   bunches: number | null
@@ -123,7 +130,9 @@ export interface RecordRow {
 
 /**
  * 서버에 새로 들어온 기록 중 폰에 없는 것을 IndexedDB에 추가한다 (synced = 1, 이미 서버에 있으므로).
- * 폰에 있는 기록은 건드리지 않는다 (기록은 추가만 하므로 같은 id면 같은 기록이다)
+ * 폰에 있는 보낸 기록(synced = 1)은 서버 것으로 바꾼다. 서버 기록은 바뀌지 않으므로 내용은 같고,
+ * 옛 버전이 모르는 칸을 빼고 저장해 둔 기록만 빠진 칸이 채워진다 (9단계).
+ * 아직 안 보낸 기록(synced = 0)은 건드리지 않는다 (올리기가 보내고 synced = 1로 바꾼다)
  */
 export const downloadNew = oneAtATime('기록 내려받기', async () => {
   const supabase = await connectedSupabase()
@@ -143,7 +152,7 @@ export const downloadNew = oneAtATime('기록 내려받기', async () => {
       .overrideTypes<RecordRow[], { merge: false }>() // 돌아오는 줄의 타입을 알려 준다 (테이블 타입을 따로 만들지 않아서)
     if (error !== null) throw error
 
-    await addMissing(data)
+    await addOrRefresh(data)
     // 폰에 다 넣은 뒤에 시각을 적는다. 넣다가 실패하면 다음에 같은 곳부터 다시 받는다
     if (data.length > 0) writeLastReceivedAt(data[data.length - 1].received_at)
     if (data.length < PAGE_SIZE) break
@@ -152,19 +161,20 @@ export const downloadNew = oneAtATime('기록 내려받기', async () => {
   writeLastSyncedAt(nowTimestamp())
 })
 
-/** 서버 기록 중 폰에 없는 id만 추가한다 */
-async function addMissing(rows: RecordRow[]): Promise<void> {
+/** 서버 기록 중 폰에 없는 id는 추가하고, 폰에 보낸 기록(synced = 1)으로 있으면 서버 것으로 바꾼다 */
+async function addOrRefresh(rows: RecordRow[]): Promise<void> {
   const records = rows.flatMap((row) => {
     const r = fromRow(row)
     if (r === null) console.warn('알 수 없는 기록이라 건너뜀', row.id)
     return r === null ? [] : [r]
   })
   if (records.length === 0) return
-  // 있는지 보기와 추가를 한 묶음(transaction)으로 한다. 그사이 같은 기록이 다른 곳에서 추가되지 않게
+  // 있는지 보기와 넣기를 한 묶음(transaction)으로 한다. 그사이 같은 기록이 다른 곳에서 추가되지 않게
   await db.transaction('rw', db.records, async () => {
     const existing = await db.records.bulkGet(records.map((r) => r.id))
-    const missing = records.filter((_, i) => existing[i] === undefined)
-    await db.records.bulkAdd(missing.map((r) => ({ ...r, synced: 1 as const })))
+    const toPut = records.filter((_, i) => existing[i] === undefined || existing[i].synced === 1)
+    // bulkPut: 없으면 추가, 있으면 통째로 바꾼다
+    await db.records.bulkPut(toPut.map((r) => ({ ...r, synced: 1 as const })))
   })
 }
 
@@ -184,10 +194,11 @@ export function fromRow(row: RecordRow): FarmRecord | null {
   }
   switch (row.type) {
     case 'spray':
-      return { ...base, type: row.type, pesticide: row.pesticide }
+      return { ...base, type: row.type, pesticide: row.pesticide, amount_ml: row.amount_ml }
     case 'top_dressing':
+      return { ...base, type: row.type, fertilizer: row.fertilizer, bags: row.bags }
     case 'fertigation':
-      return { ...base, type: row.type, fertilizer: row.fertilizer }
+      return { ...base, type: row.type, fertilizer: row.fertilizer, amount_ml: row.amount_ml }
     case 'harvest_start':
       return { ...base, type: row.type }
     case 'harvest':

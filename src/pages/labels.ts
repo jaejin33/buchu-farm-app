@@ -45,6 +45,16 @@ export function relativeTime(time: string, now: string): string {
   return `${Math.floor(hours / 24)}일 전`
 }
 
+/** 약·관비 양: 20 → "20ml" */
+export function formatMl(ml: number): string {
+  return `${ml}ml`
+}
+
+/** 비료 포 수: 0.5 → "반 포", 1 → "1포", 1.5 → "1.5포" */
+export function formatBags(bags: number): string {
+  return bags === 0.5 ? '반 포' : `${bags}포`
+}
+
 /** 입력한 사람의 이름. 이름 표에 없으면(아직 못 받았거나 Supabase에 안 넣음) "모르는 사람" */
 export function nameOf(profiles: readonly Profile[], userId: string): string {
   return profiles.find((p) => p.id === userId)?.name ?? '모르는 사람'

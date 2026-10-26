@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { problemTag, relativeTime } from './labels'
+import { formatBags, problemTag, relativeTime } from './labels'
+
+describe('formatBags', () => {
+  it('0.5포는 "반 포", 나머지는 숫자 그대로', () => {
+    expect(formatBags(0.5)).toBe('반 포')
+    expect(formatBags(1)).toBe('1포')
+    expect(formatBags(1.5)).toBe('1.5포')
+  })
+})
 
 describe('relativeTime', () => {
   const now = '2026-10-25T03:00:00.000Z'

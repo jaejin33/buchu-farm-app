@@ -18,9 +18,9 @@ function describe(
     case 'spray':
       return { title: '약', detail: r.pesticide }
     case 'top_dressing':
-      return { title: '웃거름', detail: null }
+      return { title: '웃거름', detail: r.fertilizer ?? null }
     case 'fertigation':
-      return { title: '관비', detail: null }
+      return { title: '관비', detail: r.fertilizer ?? null }
     case 'harvest_start':
       return { title: '수확 시작', detail: null }
     case 'harvest':

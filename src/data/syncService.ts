@@ -107,6 +107,7 @@ export interface RecordRow {
   work_date: string
   type: RecordType
   pesticide: string | null
+  fertilizer: string | null
   cycle_days: number | null
   boxes: number | null
   bunches: number | null
@@ -185,6 +186,7 @@ export function fromRow(row: RecordRow): FarmRecord | null {
       return { ...base, type: row.type, pesticide: row.pesticide }
     case 'top_dressing':
     case 'fertigation':
+      return { ...base, type: row.type, fertilizer: row.fertilizer }
     case 'harvest_start':
       return { ...base, type: row.type }
     case 'harvest':

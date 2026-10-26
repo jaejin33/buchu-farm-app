@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type FormEvent, type MouseEvent, type Reac
 import { DEFAULT_CYCLE_DAYS } from '../config/farm'
 import { addRecord, type NewRecord } from '../data/recordRepository'
 import { addDays, getHouseStatus, lastHarvestRecord } from '../domain/harvestCalc'
-import { latestHarvestAmount, pesticideNames } from '../domain/recordQueries'
+import { fertilizerNames, latestHarvestAmount, pesticideNames } from '../domain/recordQueries'
 import type { FarmRecord, House, HouseProblem } from '../domain/types'
 import { PROBLEM_TAG, formatDate, relativeDay } from './labels'
 import './RecordForm.css'
@@ -46,6 +46,51 @@ function Choice({ selected, onClick, children }: { selected: boolean; onClick: (
   )
 }
 
+/**
+ * 약·비료 이름 고르기·적기 (안 적어도 된다). 지난 기록의 이름(known)은 버튼으로 고르고, 다시 누르면 풀린다.
+ * 처음 쓰는 이름은 아래 칸에 적는다
+ */
+function NamePicker({
+  id,
+  what,
+  known,
+  firstTimeHint,
+  value,
+  onChange,
+}: {
+  id: string
+  what: string // "약", "비료"
+  known: string[]
+  firstTimeHint: string // 고를 이름이 있을 때 적는 칸의 안내 글자
+  value: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <>
+      <label className="field-label" htmlFor={id}>
+        {what} 이름 <span className="field-hint">(안 적어도 돼요)</span>
+      </label>
+      {known.length > 0 && (
+        <div className="chips">
+          {known.map((name) => (
+            <Choice key={name} selected={value.trim() === name} onClick={() => onChange(value.trim() === name ? '' : name)}>
+              {name}
+            </Choice>
+          ))}
+        </div>
+      )}
+      <input
+        id={id}
+        className="text-input"
+        type="text"
+        placeholder={known.length > 0 ? firstTimeHint : `${what} 이름`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </>
+  )
+}
+
 interface Props {
   house: House
   records: readonly FarmRecord[]
@@ -61,6 +106,7 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
   const [workDate, setWorkDate] = useState(today)
   const [kind, setKind] = useState<Kind | null>(null)
   const [pesticide, setPesticide] = useState('')
+  const [fertilizer, setFertilizer] = useState('')
   const [harvestStep, setHarvestStep] = useState<HarvestStep | null>(null)
   const [cycleDays, setCycleDays] = useState(String(DEFAULT_CYCLE_DAYS))
   const [boxes, setBoxes] = useState('')
@@ -77,7 +123,6 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
     detailRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [kind, harvestStep, problem])
 
-  const knownPesticides = pesticideNames(records)
   const currentProblems = getHouseStatus(records, house.no, today).problems
   const lastHarvest = lastHarvestRecord(records, house.no)
   const lastAmount = lastHarvest === null ? null : latestHarvestAmount(records, lastHarvest.id)
@@ -99,9 +144,11 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
         return { record: { ...base, type: 'spray', pesticide: name || null }, label: name ? `약(${name})` : '약' }
       }
       case 'top_dressing':
-        return { record: { ...base, type: 'top_dressing' }, label: '웃거름' }
-      case 'fertigation':
-        return { record: { ...base, type: 'fertigation' }, label: '관비' }
+      case 'fertigation': {
+        const name = fertilizer.trim()
+        const what = kind === 'top_dressing' ? '웃거름' : '관비'
+        return { record: { ...base, type: kind, fertilizer: name || null }, label: name ? `${what}(${name})` : what }
+      }
       case 'harvest':
         if (harvestStep === 'harvest_start') {
           return { record: { ...base, type: 'harvest_start' }, label: '수확 시작' }
@@ -162,6 +209,12 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
     }
   }
 
+  /** 종류를 고른다. 다른 종류로 바꾸면 적던 비료 이름은 비운다 (웃거름 비료가 관비 기록에 들어가지 않게) */
+  function chooseKind(k: Kind) {
+    if (k !== kind) setFertilizer('')
+    setKind(k)
+  }
+
   /** 문제를 고르면 "생김 / 해결됨"을 지금 상태의 반대로 미리 골라 둔다 (지금 있으면 해결됨, 없으면 생김) */
   function chooseProblem(p: HouseProblem) {
     setProblem(p)
@@ -212,7 +265,7 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
           <h2 className="field-label">무엇을 했나요?</h2>
           <div className="choices choices-3">
             {KIND_BUTTONS.map((b) => (
-              <Choice key={b.kind} selected={kind === b.kind} onClick={() => setKind(b.kind)}>
+              <Choice key={b.kind} selected={kind === b.kind} onClick={() => chooseKind(b.kind)}>
                 {b.label}
               </Choice>
             ))}
@@ -221,29 +274,26 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
 
         {kind === 'spray' && (
           <section className="form-card" ref={detailRef}>
-            <label className="field-label" htmlFor="pesticide">
-              약 이름 <span className="field-hint">(안 적어도 돼요)</span>
-            </label>
-            {knownPesticides.length > 0 && (
-              <div className="chips">
-                {knownPesticides.map((name) => (
-                  <Choice
-                    key={name}
-                    selected={pesticide.trim() === name}
-                    onClick={() => setPesticide(pesticide.trim() === name ? '' : name)}
-                  >
-                    {name}
-                  </Choice>
-                ))}
-              </div>
-            )}
-            <input
+            <NamePicker
               id="pesticide"
-              className="text-input"
-              type="text"
-              placeholder={knownPesticides.length > 0 ? '처음 치는 약이면 적어 주세요' : '약 이름'}
+              what="약"
+              known={pesticideNames(records)}
+              firstTimeHint="처음 치는 약이면 적어 주세요"
               value={pesticide}
-              onChange={(e) => setPesticide(e.target.value)}
+              onChange={setPesticide}
+            />
+          </section>
+        )}
+
+        {(kind === 'top_dressing' || kind === 'fertigation') && (
+          <section className="form-card" ref={detailRef}>
+            <NamePicker
+              id="fertilizer"
+              what="비료"
+              known={fertilizerNames(records, kind)}
+              firstTimeHint="처음 쓰는 비료면 적어 주세요"
+              value={fertilizer}
+              onChange={setFertilizer}
             />
           </section>
         )}

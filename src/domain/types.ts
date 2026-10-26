@@ -55,12 +55,18 @@ export interface SprayRecord extends RecordBase {
 /** 웃거름 */
 export interface TopDressingRecord extends RecordBase {
   type: 'top_dressing'
+  // 비료 이름. 약 이름처럼 안 적어도 된다 (null). 7단계 전에 저장한 기록에는 이 항목이 없다 (이름 없음으로 본다)
+  fertilizer?: string | null
 }
 
 /** 관비 */
 export interface FertigationRecord extends RecordBase {
   type: 'fertigation'
+  fertilizer?: string | null // 비료 이름. 웃거름과 같다
 }
+
+/** 비료 이름을 적는 기록 종류 */
+export type FertilizerType = 'top_dressing' | 'fertigation'
 
 /** 수확 시작. 한 동을 하루에 다 못 벨 때 누른다. 다음 수확 완료 기록까지 "수확 중"이다 */
 export interface HarvestStartRecord extends RecordBase {

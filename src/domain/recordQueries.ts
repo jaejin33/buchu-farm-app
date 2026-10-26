@@ -2,16 +2,34 @@
 // 취소된 기록은 harvestCalc의 activeRecords로 걸러 낸 뒤 계산한다.
 
 import { activeRecords, isLater } from './harvestCalc'
-import type { FarmRecord, HarvestAmountRecord } from './types'
+import type { FarmRecord, FertilizerType, HarvestAmountRecord } from './types'
+
+/** 약 목록. 취소되지 않은 약 기록의 약 이름을 모은다 (순서는 recentNames) */
+export function pesticideNames(records: readonly FarmRecord[]): string[] {
+  return recentNames(records, (r) => (r.type === 'spray' ? r.pesticide : null))
+}
 
 /**
- * 약 목록. 취소되지 않은 약 기록의 약 이름을 모은다.
- * 최근에 친 약이 앞에 오고, 같은 이름은 한 번만 나온다. 이름을 안 적은 기록은 건너뛴다
+ * 비료 목록. 취소되지 않은 웃거름(또는 관비) 기록의 비료 이름을 모은다 (순서는 recentNames).
+ * 웃거름과 관비는 따로 모은다. 뿌리는 비료와 물에 타는 비료가 한 목록에 섞이지 않게
  */
-export function pesticideNames(records: readonly FarmRecord[]): string[] {
+export function fertilizerNames(records: readonly FarmRecord[], type: FertilizerType): string[] {
+  return recentNames(records, (r) =>
+    (r.type === 'top_dressing' || r.type === 'fertigation') && r.type === type ? r.fertilizer : null,
+  )
+}
+
+/**
+ * 취소되지 않은 기록에서 nameOf로 뽑은 이름을 모은다.
+ * 최근 기록의 이름이 앞에 오고, 같은 이름은 한 번만 나온다. 이름을 안 적은 기록은 건너뛴다
+ */
+function recentNames(
+  records: readonly FarmRecord[],
+  nameOf: (r: FarmRecord) => string | null | undefined,
+): string[] {
   const names: { name: string; workDate: string; recordedAt: string }[] = []
   for (const r of activeRecords(records)) {
-    const name = r.type === 'spray' ? r.pesticide?.trim() : undefined
+    const name = nameOf(r)?.trim()
     if (name) names.push({ name, workDate: r.work_date, recordedAt: r.recorded_at })
   }
   // 최근 순으로 줄 세운 뒤, 처음 나온 이름만 남긴다 (Set은 넣은 순서를 지킨다)

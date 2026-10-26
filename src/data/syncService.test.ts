@@ -77,6 +77,7 @@ function row(fields: Partial<RecordRow> = {}): RecordRow {
     work_date: '2026-10-23',
     type: 'top_dressing',
     pesticide: null,
+    fertilizer: null,
     cycle_days: null,
     boxes: null,
     bunches: null,
@@ -375,6 +376,11 @@ describe('fromRow', () => {
     })
     expect(fromRow(row({ type: 'cancel', target_id: target }))).toMatchObject({ type: 'cancel', target_id: target })
     expect(fromRow(row({ type: 'spray', pesticide: null }))).toMatchObject({ type: 'spray', pesticide: null })
+    expect(fromRow(row({ type: 'top_dressing', fertilizer: '가비료' }))).toMatchObject({
+      type: 'top_dressing',
+      fertilizer: '가비료',
+    })
+    expect(fromRow(row({ type: 'fertigation', fertilizer: null }))).toMatchObject({ type: 'fertigation', fertilizer: null })
 
     const topDressing = fromRow(row({ type: 'top_dressing' }))
     expect(topDressing).not.toHaveProperty('pesticide')

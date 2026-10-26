@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { houseHistory, latestHarvestAmount, pesticideNames } from './recordQueries'
-import type { CancelRecord, FarmRecord, HarvestAmountRecord, HarvestRecord, SprayRecord } from './types'
+import { fertilizerNames, houseHistory, latestHarvestAmount, pesticideNames } from './recordQueries'
+import type {
+  CancelRecord,
+  FarmRecord,
+  FertilizerType,
+  HarvestAmountRecord,
+  HarvestRecord,
+  SprayRecord,
+} from './types'
 
 // ---- 테스트용 기록 만들기 ----
 
@@ -8,6 +15,10 @@ const common = { house_no: 1, memo: null, recorded_by: 'user-1', recorded_at: '2
 
 function spray(id: string, work_date: string, pesticide: string | null): SprayRecord {
   return { ...common, id, work_date, type: 'spray', pesticide }
+}
+
+function fertilizer(id: string, type: FertilizerType, work_date: string, name: string | null): FarmRecord {
+  return { ...common, id, work_date, type, fertilizer: name }
 }
 
 function harvest(id: string, work_date: string): HarvestRecord {
@@ -53,6 +64,37 @@ describe('pesticideNames', () => {
 
   it('약 기록이 없으면 빈 목록', () => {
     expect(pesticideNames([harvest('h', '2026-10-01')])).toEqual([])
+  })
+})
+
+// ---- 비료 목록 ----
+
+describe('fertilizerNames', () => {
+  it('웃거름과 관비는 따로 모은다 (최근에 쓴 비료가 앞)', () => {
+    const records = [
+      fertilizer('a', 'top_dressing', '2026-10-01', '가비료'),
+      fertilizer('b', 'fertigation', '2026-10-02', '물비료'),
+      fertilizer('c', 'top_dressing', '2026-10-03', '나비료'),
+    ]
+    expect(fertilizerNames(records, 'top_dressing')).toEqual(['나비료', '가비료'])
+    expect(fertilizerNames(records, 'fertigation')).toEqual(['물비료'])
+  })
+
+  it('약 이름은 넣지 않는다', () => {
+    const records = [spray('a', '2026-10-01', '가약'), fertilizer('b', 'top_dressing', '2026-10-02', '가비료')]
+    expect(fertilizerNames(records, 'top_dressing')).toEqual(['가비료'])
+  })
+
+  it('이름을 안 적었거나 이름 항목이 없는 기록(7단계 전), 취소된 기록은 건너뛴다', () => {
+    const before7: FarmRecord = { ...common, id: 'a', work_date: '2026-10-01', type: 'top_dressing' }
+    const records: FarmRecord[] = [
+      before7,
+      fertilizer('b', 'top_dressing', '2026-10-02', null),
+      fertilizer('c', 'top_dressing', '2026-10-03', '잘못적은비료'),
+      cancel('d', 'c'),
+      fertilizer('e', 'top_dressing', '2026-10-04', ' 가비료 '),
+    ]
+    expect(fertilizerNames(records, 'top_dressing')).toEqual(['가비료'])
   })
 })
 

@@ -94,12 +94,12 @@ HTML의 `<button onclick="...">`과 같은데, 글자가 아니라 **함수**를
 const [workDate, setWorkDate] = useState(today)
 
 // 계산값: 그릴 때마다 새로 계산
-const knownPesticides = pesticideNames(records)
+const currentProblems = getHouseStatus(records, house.no, today).problems
 const dateOk = workDate !== '' && workDate <= today
 const built = buildRecord()
 ```
 
-약 목록이나 "저장할 수 있는지"를 상태로 두면, 기록이나 날짜가 바뀔 때마다 그 상태도 같이 고쳐 줘야 한다. 하나라도 잊으면 화면이 틀린다. **다른 값에서 계산할 수 있는 건 그냥 계산한다.** 함수가 다시 실행될 때마다 새로 계산되니 항상 맞다.
+지금 있는 문제나 "저장할 수 있는지"를 상태로 두면, 기록이나 날짜가 바뀔 때마다 그 상태도 같이 고쳐 줘야 한다. 하나라도 잊으면 화면이 틀린다. **다른 값에서 계산할 수 있는 건 그냥 계산한다.** 함수가 다시 실행될 때마다 새로 계산되니 항상 맞다.
 
 Spring으로 치면 DB에 "합계" 컬럼을 따로 두지 않고 조회할 때 `SUM`으로 계산하는 것과 같은 생각이다.
 

@@ -30,6 +30,7 @@ export type RecordType =
   | 'spray'
   | 'top_dressing'
   | 'fertigation'
+  | 'water'
   | 'harvest_start'
   | 'harvest'
   | 'harvest_amount'
@@ -74,6 +75,13 @@ export type FertilizerType = 'top_dressing' | 'fertigation'
 
 /** 쓴 양을 적는 기록 종류. 약·관비는 ml, 비료(웃거름)는 포 */
 export type AmountType = 'spray' | FertilizerType
+
+/** 물 (11단계). 한 동씩 준다. 관비(비료를 물에 타서 줌)와 따로, 물만 준 것을 남긴다 */
+export interface WaterRecord extends RecordBase {
+  type: 'water'
+  // 물을 준 시간(분). 화면에서 시간·분(10분씩)을 [−][+]로 맞춘다. 앱은 늘 넣지만, 서버 칸이 비어 있을 수 있어 null도 받는다
+  water_minutes: number | null
+}
 
 /** 수확 시작. 한 동을 하루에 다 못 벨 때 누른다. 다음 수확 완료 기록까지 "수확 중"이다 */
 export interface HarvestStartRecord extends RecordBase {
@@ -122,6 +130,7 @@ export type FarmRecord =
   | SprayRecord
   | TopDressingRecord
   | FertigationRecord
+  | WaterRecord
   | HarvestStartRecord
   | HarvestRecord
   | HarvestAmountRecord

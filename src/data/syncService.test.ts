@@ -47,8 +47,9 @@ const DUPLICATE = { error: { code: '23505', message: 'duplicate key value violat
 const REJECTED = { error: { code: '42501', message: 'new row violates row-level security policy' } }
 const USER_A = '22222222-2222-4222-8222-222222222222'
 const USER_B = '33333333-3333-4333-8333-333333333333'
-const LAST_RECEIVED_KEY = 'buchu-farm:last-received-at:2'
+const LAST_RECEIVED_KEY = 'buchu-farm:last-received-at:3'
 const OLD_LAST_RECEIVED_KEY = 'buchu-farm:last-received-at' // 9단계 전 버전이 쓰던 이름
+const STEP9_LAST_RECEIVED_KEY = 'buchu-farm:last-received-at:2' // 9·10단계 버전이 쓰던 이름
 
 let nextNo = 1
 /** 기록 id (끝자리만 다르게) */
@@ -81,6 +82,7 @@ function row(fields: Partial<RecordRow> = {}): RecordRow {
     fertilizer: null,
     amount_ml: null,
     bags: null,
+    water_minutes: null,
     cycle_days: null,
     boxes: null,
     bunches: null,
@@ -248,6 +250,14 @@ describe('downloadNew', () => {
 
   it('9단계 전 버전이 적어 둔 시각은 쓰지 않고 처음부터 다시 받는다', async () => {
     localStorage.setItem(OLD_LAST_RECEIVED_KEY, '2026-10-23T01:10:00.000+00:00')
+
+    await downloadNew()
+
+    expect(gte).not.toHaveBeenCalled()
+  })
+
+  it('10단계까지의 버전이 적어 둔 시각도 쓰지 않고 처음부터 다시 받는다 (옛 버전이 건너뛴 물 기록을 받으려고)', async () => {
+    localStorage.setItem(STEP9_LAST_RECEIVED_KEY, '2026-10-23T01:10:00.000+00:00')
 
     await downloadNew()
 
@@ -424,6 +434,10 @@ describe('fromRow', () => {
       fertilizer: null,
       amount_ml: 300,
     })
+
+    expect(fromRow(row({ type: 'water', water_minutes: 120 }))).toMatchObject({ type: 'water', water_minutes: 120 })
+    expect(fromRow(row({ type: 'water', water_minutes: null }))).toMatchObject({ type: 'water', water_minutes: null })
+    expect(fromRow(row({ type: 'water' }))).not.toHaveProperty('amount_ml')
 
     const topDressing = fromRow(row({ type: 'top_dressing' }))
     expect(topDressing).not.toHaveProperty('pesticide')

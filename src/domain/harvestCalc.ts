@@ -10,6 +10,7 @@ import type {
   Problem,
   ProblemRecord,
   SprayRecord,
+  WaterRecord,
 } from './types'
 
 export type HouseStatusKind =
@@ -26,6 +27,8 @@ export interface HouseStatus {
   daysSinceHarvest: number | null
   /** 마지막 약 후 며칠. 당일은 0. 약 기록이 없으면 null */
   daysSinceSpray: number | null
+  /** 마지막 물 후 며칠. 당일은 0. 물 기록이 없으면 null (11단계) */
+  daysSinceWater: number | null
   /** 수확 가능일 = 마지막 수확일 + 그 기록의 cycle_days. 수확 기록이 없으면 null. 목록 정렬에 쓴다 */
   readyDate: string | null
   /** 지금 있는 문제. 없으면 빈 배열. 배수·균사(PROBLEM_ORDER)가 먼저, 그다음 직접 적은 문제를 처음 기록된 순서로 */
@@ -110,6 +113,11 @@ export function lastHarvestRecord(records: readonly FarmRecord[], houseNo: numbe
   return lastOf(records, (r): r is HarvestRecord => r.type === 'harvest' && r.house_no === houseNo)
 }
 
+/** houseNo 동의 마지막 (취소되지 않은) 물 기록. 없으면 null */
+export function lastWaterRecord(records: readonly FarmRecord[], houseNo: number): WaterRecord | null {
+  return lastOf(records, (r): r is WaterRecord => r.type === 'water' && r.house_no === houseNo)
+}
+
 // ---- 문제 ----
 
 /** 문제 기록이 가리키는 문제. 직접 적은 문제인데 이름이 비었으면 null (무시한다) */
@@ -164,10 +172,12 @@ export function getHouseStatus(records: readonly FarmRecord[], houseNo: number, 
   const start = lastOf(records, (r): r is HarvestStartRecord => r.type === 'harvest_start' && r.house_no === houseNo)
   const harvest = lastHarvestRecord(records, houseNo)
   const spray = lastOf(records, (r): r is SprayRecord => r.type === 'spray' && r.house_no === houseNo)
+  const water = lastWaterRecord(records, houseNo)
 
   const base = {
     daysSinceHarvest: harvest === null ? null : daysBetween(harvest.work_date, today),
     daysSinceSpray: spray === null ? null : daysBetween(spray.work_date, today),
+    daysSinceWater: water === null ? null : daysBetween(water.work_date, today),
     readyDate: harvest === null ? null : addDays(harvest.work_date, harvest.cycle_days),
     problems: currentProblems(records, houseNo),
   }

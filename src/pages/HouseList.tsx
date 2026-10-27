@@ -1,4 +1,4 @@
-// 하우스 목록 화면. 25동을 구역별 카드로 묶고, 한 줄에 한 동씩 수확 후·약 후 경과 일수와 수확 중·수확 가능 배지를 보여준다.
+// 하우스 목록 화면. 25동을 구역별 카드로 묶고, 한 줄에 한 동씩 수확 후·약 후·물 후 경과 일수와 수확 중·수확 가능 배지를 보여준다.
 // 머리에 "미전송 N건 · 마지막 동기화: N분 전"을 작게 보여준다 (다른 폰 기록이 안 보일 때 여기를 본다).
 // 기록, 동기화 상태, "오늘"과 지금 시각은 props로 받는다. 이 화면은 기록이 어디서 오는지(IndexedDB 등) 모른다.
 // 동 한 줄을 누르면 onSelectHouse로 그 동 번호를 알린다 (기록 입력 화면은 App이 연다).
@@ -101,9 +101,19 @@ export default function HouseList({
                       ) : (
                         <span className="house-main is-empty">수확 기록 없음</span>
                       )}
-                      {status.daysSinceSpray !== null && (
+                      {/* 아랫줄: "약 후 3일 · 물 후 2일". 기록이 있는 것만 쓴다 */}
+                      {(status.daysSinceSpray !== null || status.daysSinceWater !== null) && (
                         <span className="house-sub">
-                          <Elapsed label="약" days={status.daysSinceSpray} />
+                          {status.daysSinceSpray !== null && (
+                            <span className="house-sub-item">
+                              <Elapsed label="약" days={status.daysSinceSpray} />
+                            </span>
+                          )}
+                          {status.daysSinceWater !== null && (
+                            <span className="house-sub-item">
+                              <Elapsed label="물" days={status.daysSinceWater} />
+                            </span>
+                          )}
                         </span>
                       )}
                     </span>

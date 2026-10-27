@@ -9,7 +9,7 @@ import { problemOf } from '../domain/harvestCalc'
 import { houseHistory, latestHarvestAmount } from '../domain/recordQueries'
 import type { FarmRecord, House, Profile } from '../domain/types'
 import './History.css'
-import { formatBags, formatDate, formatMl, nameOf, problemTag, relativeDay } from './labels'
+import { formatBags, formatDate, formatMinutes, formatMl, nameOf, problemTag, relativeDay } from './labels'
 
 /** 이력 한 줄의 글자: 무엇(title), 자세한 내용(detail), 아랫줄 설명(note) */
 function describe(
@@ -24,6 +24,8 @@ function describe(
       return { title: '비료', detail: joinDetail(r.fertilizer, r.bags, formatBags) }
     case 'fertigation':
       return { title: '관비', detail: joinDetail(r.fertilizer, r.amount_ml, formatMl) }
+    case 'water':
+      return { title: '물', detail: r.water_minutes === null ? null : formatMinutes(r.water_minutes) }
     case 'harvest_start':
       return { title: '수확 시작', detail: null }
     case 'harvest':

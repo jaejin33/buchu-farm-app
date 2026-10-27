@@ -7,19 +7,27 @@ import { useEffect, useRef, useState, type FormEvent, type MouseEvent, type Reac
 import { DEFAULT_CYCLE_DAYS } from '../config/farm'
 import { addRecord, editRecord, type NewRecord } from '../data/recordRepository'
 import { addDays, getHouseStatus, lastHarvestRecord, problemKey, problemOf } from '../domain/harvestCalc'
-import { fertilizerNames, lastUsedAmount, latestHarvestAmount, pesticideNames, problemNames } from '../domain/recordQueries'
+import {
+  fertilizerNames,
+  lastUsedAmount,
+  lastWaterMinutes,
+  latestHarvestAmount,
+  pesticideNames,
+  problemNames,
+} from '../domain/recordQueries'
 import type { AmountType, FarmRecord, House, HouseProblem, Problem, RecordType } from '../domain/types'
-import { PROBLEM_TAG, formatBags, formatDate, problemTag, relativeDay } from './labels'
+import { PROBLEM_TAG, formatBags, formatDate, formatMinutes, problemTag, relativeDay } from './labels'
 import './RecordForm.css'
 
 /** 첫 화면에서 고르는 종류. 수확은 고른 뒤 "시작 / 완료 / 수확량"을 한 번 더 고른다 */
-type Kind = 'spray' | 'top_dressing' | 'fertigation' | 'harvest' | 'problem'
+type Kind = 'spray' | 'top_dressing' | 'fertigation' | 'water' | 'harvest' | 'problem'
 type HarvestStep = 'harvest_start' | 'harvest' | 'harvest_amount'
 
 const KIND_BUTTONS: { kind: Kind; label: string }[] = [
   { kind: 'spray', label: '약' },
   { kind: 'top_dressing', label: '비료' }, // 9단계 전에는 "웃거름". 기록 종류(top_dressing)는 그대로
   { kind: 'fertigation', label: '관비' },
+  { kind: 'water', label: '물' }, // 11단계. 한 줄에 셋이라 둘째 줄 첫 칸
   { kind: 'harvest', label: '수확' },
   { kind: 'problem', label: '문제' },
 ]
@@ -36,6 +44,7 @@ const TYPE_LABEL: Record<Exclude<RecordType, 'cancel'>, string> = {
   spray: '약',
   top_dressing: '비료',
   fertigation: '관비',
+  water: '물',
   harvest_start: '수확 시작',
   harvest: '수확 완료',
   harvest_amount: '수확량',
@@ -72,6 +81,14 @@ function toAmount(typed: string): number | null {
   const n = Number(typed)
   return typed === '' || !Number.isFinite(n) || n <= 0 ? null : n
 }
+
+/** 처음 물 주는 동에 미리 맞춰 두는 시간(분) */
+const DEFAULT_WATER_MINUTES = 60
+
+/** 물 준 시간의 범위(분). 분은 10분씩 올리고 내린다. 길면 5시간이라고 해서 넉넉히 10시간까지 */
+const WATER_MIN_MINUTES = 10
+const WATER_MAX_MINUTES = 600
+const WATER_MINUTE_STEP = 10
 
 /** 비료 포 수 버튼. 이보다 많으면 칸에 적는다 */
 const BAG_CHOICES = [0.5, 1, 2, 3]
@@ -157,6 +174,45 @@ function MlField({ id, label, value, onChange }: { id: string; label: string; va
   )
 }
 
+/**
+ * 물 준 시간: [−] 2 시간 [+] / [−] 30 분 [+]. 시간은 1시간씩, 분은 10분씩.
+ * 분이 50에서 늘리면 다음 시간 0분이 된다 (값은 분 하나로 들고 있어서 저절로 넘어간다).
+ * 범위(10분~10시간)를 넘는 쪽 버튼은 꺼진다
+ */
+function WaterTimeField({ minutes, onChange }: { minutes: number; onChange: (minutes: number) => void }) {
+  const rows = [
+    { unit: '시간', value: Math.floor(minutes / 60), step: 60 },
+    { unit: '분', value: minutes % 60, step: WATER_MINUTE_STEP },
+  ]
+  return (
+    <>
+      <h2 className="field-label">준 시간</h2>
+      {rows.map(({ unit, value, step }) => (
+        <div key={unit} className="stepper">
+          <button
+            type="button"
+            aria-label={`${unit} 줄이기`}
+            disabled={minutes - step < WATER_MIN_MINUTES}
+            onClick={() => onChange(minutes - step)}
+          >
+            −
+          </button>
+          <span className="stepper-value">{value}</span>
+          <span className="stepper-unit">{unit}</span>
+          <button
+            type="button"
+            aria-label={`${unit} 늘리기`}
+            disabled={minutes + step > WATER_MAX_MINUTES}
+            onClick={() => onChange(minutes + step)}
+          >
+            +
+          </button>
+        </div>
+      ))}
+    </>
+  )
+}
+
 /** 비료 포 수 (소수도, 안 적어도 된다). [반 포][1포][2포][3포]를 누르거나, 그보다 많으면 칸에 적는다 */
 function BagsField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const bags = toAmount(value)
@@ -196,6 +252,7 @@ interface FormValues {
   pesticide: string
   fertilizer: string
   amount: string
+  waterMinutes: number
   harvestStep: HarvestStep | null
   cycleDays: string
   boxes: string
@@ -218,6 +275,7 @@ function initialValues(editing: FarmRecord | undefined, today: string): FormValu
     pesticide: '',
     fertilizer: '',
     amount: '',
+    waterMinutes: DEFAULT_WATER_MINUTES,
     harvestStep: null,
     cycleDays: String(DEFAULT_CYCLE_DAYS),
     boxes: '',
@@ -236,6 +294,8 @@ function initialValues(editing: FarmRecord | undefined, today: string): FormValu
       return { ...v, kind: 'top_dressing', fertilizer: editing.fertilizer ?? '', amount: toText(editing.bags) }
     case 'fertigation':
       return { ...v, kind: 'fertigation', fertilizer: editing.fertilizer ?? '', amount: toText(editing.amount_ml) }
+    case 'water':
+      return { ...v, kind: 'water', waterMinutes: editing.water_minutes ?? DEFAULT_WATER_MINUTES }
     case 'harvest_start':
       return { ...v, kind: 'harvest', harvestStep: 'harvest_start' }
     case 'harvest':
@@ -271,6 +331,7 @@ export default function RecordForm({ house, records, today, editing, onSaved, on
   const [pesticide, setPesticide] = useState(init.pesticide)
   const [fertilizer, setFertilizer] = useState(init.fertilizer)
   const [amount, setAmount] = useState(init.amount) // 약·관비는 ml, 비료는 포. 종류를 바꾸면 비운다 (단위가 달라서)
+  const [waterMinutes, setWaterMinutes] = useState(init.waterMinutes)
   const [harvestStep, setHarvestStep] = useState<HarvestStep | null>(init.harvestStep)
   const [cycleDays, setCycleDays] = useState(init.cycleDays)
   const [boxes, setBoxes] = useState(init.boxes)
@@ -340,6 +401,11 @@ export default function RecordForm({ house, records, today, editing, onSaved, on
           label: name ? `관비(${name})` : '관비',
         }
       }
+      case 'water':
+        return {
+          record: { ...base, type: 'water', water_minutes: waterMinutes },
+          label: `물(${formatMinutes(waterMinutes)})`,
+        }
       case 'harvest':
         if (harvestStep === 'harvest_start') {
           return { record: { ...base, type: 'harvest_start' }, label: '수확 시작' }
@@ -415,6 +481,8 @@ export default function RecordForm({ house, records, today, editing, onSaved, on
     if (k !== kind) {
       setFertilizer('')
       setAmount('')
+      // 물은 그 동에 지난번 준 시간을 미리 맞춘다 (처음이면 1시간). 바꾸지 않고 저장하면 그 시간으로 남는다
+      if (k === 'water') setWaterMinutes(lastWaterMinutes(records, house.no) ?? DEFAULT_WATER_MINUTES)
     }
     setKind(k)
   }
@@ -537,6 +605,12 @@ export default function RecordForm({ house, records, today, editing, onSaved, on
             ) : (
               <MlField id="amount-ml" label="원액 양" value={amount} onChange={setAmount} />
             )}
+          </section>
+        )}
+
+        {kind === 'water' && (
+          <section className="form-card" ref={detailRef}>
+            <WaterTimeField minutes={waterMinutes} onChange={setWaterMinutes} />
           </section>
         )}
 

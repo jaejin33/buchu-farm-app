@@ -7,11 +7,13 @@ create table public.records (
   house_no     int  not null,
   work_date    date not null,
   type         text not null check (type in
-                 ('spray','top_dressing','fertigation','harvest_start','harvest','harvest_amount','problem','cancel')),
+                 ('spray','top_dressing','fertigation','water','harvest_start','harvest','harvest_amount','problem','cancel')),
+                                       -- 'water'는 11단계에 더함 (records-water.sql)
   pesticide    text,                   -- spray
   fertilizer   text,                   -- top_dressing, fertigation (7단계에 더함, records-fertilizer.sql)
   amount_ml    int,                    -- spray, fertigation: ml (9단계에 더함, records-amount.sql)
   bags         numeric,                -- top_dressing: 포 수, 소수도 (9단계에 더함, records-amount.sql)
+  water_minutes int,                   -- water: 물 준 시간(분) (11단계에 더함, records-water.sql)
   cycle_days   int,                    -- harvest
   boxes        int,                    -- harvest_amount
   bunches      int,                    -- harvest_amount
@@ -34,7 +36,7 @@ create index records_received_at_idx on public.records (received_at);
 -- 추가할 때 received_at은 폰이 정할 수 없게 뺀다. 서버 시각(now())만 들어가야 내려받기가 기록을 놓치지 않는다
 revoke all on public.records from anon, authenticated;
 grant select on public.records to authenticated;
-grant insert (id, house_no, work_date, type, pesticide, fertilizer, amount_ml, bags, cycle_days, boxes, bunches,
+grant insert (id, house_no, work_date, type, pesticide, fertilizer, amount_ml, bags, water_minutes, cycle_days, boxes, bunches,
               problem, problem_name, resolved, target_id, memo, recorded_by, recorded_at)
   on public.records to authenticated;
 

@@ -1,11 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { formatBags, problemTag, relativeTime } from './labels'
+import { formatBags, formatMinutes, problemTag, relativeTime } from './labels'
 
 describe('formatBags', () => {
   it('0.5포는 "반 포", 나머지는 숫자 그대로', () => {
     expect(formatBags(0.5)).toBe('반 포')
     expect(formatBags(1)).toBe('1포')
     expect(formatBags(1.5)).toBe('1.5포')
+  })
+})
+
+describe('formatMinutes', () => {
+  it('1시간이 안 되면 분, 딱 맞으면 시간, 남으면 시간과 분', () => {
+    expect(formatMinutes(30)).toBe('30분')
+    expect(formatMinutes(60)).toBe('1시간')
+    expect(formatMinutes(300)).toBe('5시간')
+    expect(formatMinutes(90)).toBe('1시간 30분')
   })
 })
 

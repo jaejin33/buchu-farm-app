@@ -3,6 +3,7 @@ import {
   fertilizerNames,
   houseHistory,
   lastUsedAmount,
+  lastWaterMinutes,
   latestHarvestAmount,
   pesticideNames,
   problemNames,
@@ -14,6 +15,7 @@ import type {
   HarvestAmountRecord,
   HarvestRecord,
   SprayRecord,
+  WaterRecord,
 } from './types'
 
 // ---- 테스트용 기록 만들기 ----
@@ -38,6 +40,10 @@ function harvest(id: string, work_date: string): HarvestRecord {
 
 function amount(id: string, target_id: string, recorded_at: string, boxes: number): HarvestAmountRecord {
   return { ...common, id, work_date: '2026-10-21', recorded_at, type: 'harvest_amount', target_id, boxes, bunches: 0 }
+}
+
+function water(id: string, work_date: string, water_minutes: number | null, house_no = 1): WaterRecord {
+  return { ...common, id, house_no, work_date, type: 'water', water_minutes }
 }
 
 function cancel(id: string, target_id: string): CancelRecord {
@@ -151,6 +157,30 @@ describe('lastUsedAmount', () => {
 })
 
 // ---- 직접 적은 문제 이름 목록 ----
+
+// ---- 물 시간 (11단계) ----
+
+describe('lastWaterMinutes', () => {
+  it('그 동에 마지막으로 준 시간', () => {
+    const records = [water('a', '2026-10-10', 120), water('b', '2026-10-17', 180), water('c', '2026-10-12', 60)]
+    expect(lastWaterMinutes(records, 1)).toBe(180)
+  })
+
+  it('다른 동의 시간은 보지 않는다', () => {
+    const records = [water('a', '2026-10-10', 120), water('b', '2026-10-17', 300, 2)]
+    expect(lastWaterMinutes(records, 1)).toBe(120)
+    expect(lastWaterMinutes(records, 3)).toBeNull()
+  })
+
+  it('시간을 안 고른 기록과 취소된 기록은 건너뛴다', () => {
+    const records = [water('a', '2026-10-10', 120), water('b', '2026-10-15', 240), water('c', '2026-10-17', null), cancel('x', 'b')]
+    expect(lastWaterMinutes(records, 1)).toBe(120)
+  })
+
+  it('물 기록이 없으면 null', () => {
+    expect(lastWaterMinutes([spray('a', '2026-10-10', '가약')], 1)).toBeNull()
+  })
+})
 
 describe('problemNames', () => {
   it('직접 적은 문제 이름을 최근 순으로, 해결된 것과 다른 동 것도 모은다', () => {

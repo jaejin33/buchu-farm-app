@@ -17,9 +17,10 @@ const DUPLICATE_KEY = '23505'
 /**
  * 마지막으로 받은 기록의 서버 시각(received_at). 다음 내려받기는 이 시각 근처부터 가져온다.
  * 이름 끝 숫자는 "기록 모양" 번호다. 기록에 새 칸을 더하면 숫자를 올린다. 그러면 새 버전은 이 값을 못 찾아
- * 처음부터 다시 받고, 옛 버전이 새 칸을 모르고 저장해 둔 기록(9단계 ml·포, 7단계 비료 이름)을 서버 것으로 바꾼다 (9단계)
+ * 처음부터 다시 받고, 옛 버전이 새 칸을 모르고 저장해 둔 기록(9단계 ml·포, 7단계 비료 이름)을 서버 것으로 바꾼다 (9단계).
+ * 옛 버전이 모르는 종류라 건너뛴 기록(11단계 물)도 이때 받는다 (11단계에 3으로 올림)
  */
-const LAST_RECEIVED_KEY = 'buchu-farm:last-received-at:2'
+const LAST_RECEIVED_KEY = 'buchu-farm:last-received-at:3'
 
 /**
  * 내려받을 때 마지막으로 받은 시각보다 이만큼 앞부터 다시 가져온다.
@@ -115,6 +116,7 @@ export interface RecordRow {
   fertilizer: string | null
   amount_ml: number | null
   bags: number | null
+  water_minutes: number | null
   cycle_days: number | null
   boxes: number | null
   bunches: number | null
@@ -199,6 +201,8 @@ export function fromRow(row: RecordRow): FarmRecord | null {
       return { ...base, type: row.type, fertilizer: row.fertilizer, bags: row.bags }
     case 'fertigation':
       return { ...base, type: row.type, fertilizer: row.fertilizer, amount_ml: row.amount_ml }
+    case 'water':
+      return { ...base, type: row.type, water_minutes: row.water_minutes }
     case 'harvest_start':
       return { ...base, type: row.type }
     case 'harvest':

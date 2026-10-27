@@ -149,11 +149,22 @@
   font-weight: 500;
 }
 
+/* 좁은 폰에서 넘치면 항목 사이에서만 꺾는다 ("약 후 / 3일"처럼 중간에서 갈라지지 않게) */
 .house-sub {
-  display: block;
+  display: flex;
+  flex-wrap: wrap;
   margin-top: 0.1rem;
   font-size: 0.85rem;
   color: var(--text-sub);
+}
+
+.house-sub-item {
+  white-space: nowrap;
+}
+
+.house-sub-item + .house-sub-item::before {
+  content: '·';
+  margin: 0 0.35rem;
 }
 
 /* 알약 모양 배지. 색만으로 구분하지 않고 글자("수확 가능")를 함께 쓴다 */

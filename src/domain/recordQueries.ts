@@ -2,7 +2,7 @@
 // 취소된 기록은 harvestCalc의 activeRecords로 걸러 낸 뒤 계산한다.
 
 import { activeRecords, isLater } from './harvestCalc'
-import type { AmountType, FarmRecord, FertilizerType, HarvestAmountRecord } from './types'
+import type { AmountType, FarmRecord, FertilizerType, HarvestAmountRecord, WaterRecord } from './types'
 
 /** 약 목록. 취소되지 않은 약 기록의 약 이름을 모은다 (순서는 recentNames) */
 export function pesticideNames(records: readonly FarmRecord[]): string[] {
@@ -37,6 +37,19 @@ export function lastUsedAmount(records: readonly FarmRecord[], type: AmountType,
     }
   }
   return latestAmount
+}
+
+/**
+ * houseNo 동에 마지막으로 물을 준 시간(분). 물 입력 화면에 미리 골라 둔다 (동마다 주는 시간이 다를 수 있어서 그 동 것만 본다).
+ * 취소되지 않은 물 기록 중 시간을 고른 것만 본다. 없으면 null (화면은 1시간을 고른다)
+ */
+export function lastWaterMinutes(records: readonly FarmRecord[], houseNo: number): number | null {
+  let latest: WaterRecord | null = null
+  for (const r of activeRecords(records)) {
+    if (r.type !== 'water' || r.house_no !== houseNo || r.water_minutes === null) continue
+    if (latest === null || isLater(r, latest)) latest = r
+  }
+  return latest?.water_minutes ?? null
 }
 
 /** 기록에 적은 양. 양을 적는 종류가 아니거나 안 적었으면 null */

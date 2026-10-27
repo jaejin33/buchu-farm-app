@@ -55,6 +55,14 @@ export function formatBags(bags: number): string {
   return bags === 0.5 ? '반 포' : `${bags}포`
 }
 
+/** 물 준 시간: 30 → "30분", 60 → "1시간", 90 → "1시간 30분" */
+export function formatMinutes(minutes: number): string {
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  if (hours === 0) return `${rest}분`
+  return rest === 0 ? `${hours}시간` : `${hours}시간 ${rest}분`
+}
+
 /** 입력한 사람의 이름. 이름 표에 없으면(아직 못 받았거나 Supabase에 안 넣음) "모르는 사람" */
 export function nameOf(profiles: readonly Profile[], userId: string): string {
   return profiles.find((p) => p.id === userId)?.name ?? '모르는 사람'

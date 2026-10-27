@@ -12,6 +12,7 @@ import type {
   ProblemRecord,
   SprayRecord,
   TopDressingRecord,
+  WaterRecord,
 } from './types'
 
 // ---- 테스트용 기록 만들기 ----
@@ -58,6 +59,11 @@ function topDressing(id: string, house_no: number, work_date: string): TopDressi
 
 function fertigation(id: string, house_no: number, work_date: string): FertigationRecord {
   return { ...common, id, house_no, work_date, type: 'fertigation' }
+}
+
+/** 물 (11단계) */
+function water(id: string, house_no: number, work_date: string, water_minutes: number | null = 60): WaterRecord {
+  return { ...common, id, house_no, work_date, type: 'water', water_minutes }
 }
 
 function cancel(id: string, house_no: number, target_id: string): CancelRecord {
@@ -135,6 +141,7 @@ describe('getHouseStatus', () => {
       daysSinceHarvestStart: null,
       daysSinceHarvest: null,
       daysSinceSpray: null,
+      daysSinceWater: null,
       readyDate: null,
       problems: [],
     })
@@ -151,6 +158,7 @@ describe('getHouseStatus', () => {
       daysSinceHarvestStart: null,
       daysSinceHarvest: null,
       daysSinceSpray: 3,
+      daysSinceWater: null,
       readyDate: null,
       problems: [],
     })
@@ -162,6 +170,7 @@ describe('getHouseStatus', () => {
       daysSinceHarvestStart: null,
       daysSinceHarvest: 20,
       daysSinceSpray: null,
+      daysSinceWater: null,
       readyDate: '2026-11-05',
       problems: [],
     })
@@ -260,10 +269,41 @@ describe('getHouseStatus', () => {
       daysSinceHarvestStart: null,
       daysSinceHarvest: 50,
       daysSinceSpray: null,
+      daysSinceWater: null,
       readyDate: '2026-10-06',
       problems: [],
     })
     expect(getHouseStatus(records, 2, today).kind).toBe('growing')
+  })
+})
+
+// ---- 물 (11단계) ----
+describe('getHouseStatus: 물', () => {
+  const today = '2026-10-21'
+
+  it('오늘 물을 주면 물 후 0일', () => {
+    expect(getHouseStatus([water('w', 1, today)], 1, today).daysSinceWater).toBe(0)
+  })
+
+  it('여러 번 줬으면 마지막으로 준 날부터 센다 (시간을 안 고른 기록도 센다)', () => {
+    const records = [water('a', 1, '2026-10-10'), water('b', 1, '2026-10-17', null), water('c', 1, '2026-10-12')]
+    expect(getHouseStatus(records, 1, today).daysSinceWater).toBe(4)
+  })
+
+  it('물 기록을 취소하면 그 전 물부터 센다', () => {
+    const records = [water('a', 1, '2026-10-10'), water('b', 1, '2026-10-17'), cancel('c', 1, 'b')]
+    expect(getHouseStatus(records, 1, today).daysSinceWater).toBe(11)
+  })
+
+  it('관비는 물로 세지 않는다 (관비와 물은 따로 기록한다)', () => {
+    expect(getHouseStatus([fertigation('f', 1, '2026-10-20')], 1, today).daysSinceWater).toBeNull()
+  })
+
+  it('물만 있으면 ⚪ 수확 기록 없음이고, 다른 동의 물은 세지 않는다', () => {
+    const records = [water('w', 1, '2026-10-20'), water('w2', 2, today)]
+    const status = getHouseStatus(records, 1, today)
+    expect(status.kind).toBe('no_record')
+    expect(status.daysSinceWater).toBe(1)
   })
 })
 
@@ -278,6 +318,7 @@ describe('getHouseStatus: 수확 중', () => {
       daysSinceHarvestStart: 0,
       daysSinceHarvest: null,
       daysSinceSpray: null,
+      daysSinceWater: null,
       readyDate: null,
       problems: [],
     })
@@ -298,6 +339,7 @@ describe('getHouseStatus: 수확 중', () => {
       daysSinceHarvestStart: 1,
       daysSinceHarvest: 41,
       daysSinceSpray: 3,
+      daysSinceWater: null,
       readyDate: '2026-10-15',
       problems: [],
     })

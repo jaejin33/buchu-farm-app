@@ -66,7 +66,7 @@ export interface TopDressingRecord extends RecordBase {
 export interface FertigationRecord extends RecordBase {
   type: 'fertigation'
   fertilizer?: string | null // 비료 이름. 비료(웃거름)와 같다
-  amount_ml?: number | null // 한 동에 쓴 양(ml, 정수). 약과 같다
+  amount_ml?: number | null // 한 동에 쓴 비료 원액 양(ml, 정수). 물에 탄 양이 아니다. 약과 같다
 }
 
 /** 비료 이름을 적는 기록 종류 */

@@ -437,7 +437,7 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
             {kind === 'top_dressing' ? (
               <BagsField value={amount} onChange={setAmount} />
             ) : (
-              <MlField id="amount-ml" label="양" value={amount} onChange={setAmount} />
+              <MlField id="amount-ml" label="원액 양" value={amount} onChange={setAmount} />
             )}
           </section>
         )}

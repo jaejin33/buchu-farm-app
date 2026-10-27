@@ -166,6 +166,14 @@
   color: var(--primary-strong);
 }
 
+/* 수정할 때 종류 버튼 대신 보여 주는 종류 이름. 바꿀 수 없어서 버튼 모양(테두리)은 쓰지 않는다 */
+.fixed-kind {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--primary-strong);
+}
+
 /* ---- 수확 가능까지 일수: [−] [35] 일 [+] ---- */
 
 .stepper {

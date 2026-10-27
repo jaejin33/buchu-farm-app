@@ -1,13 +1,14 @@
 // 기록 입력 화면. 목록에서 동을 누르면 열린다.
 // 날짜(기본 오늘) → 무엇을 했는지 → (필요하면 자세한 내용) → 저장. 버튼 몇 번으로 30초 안에 끝나게 만든다.
 // 저장은 recordRepository를 거친다. 기록과 "오늘"은 props로 받는다.
+// 이력의 [수정]으로 열면(editing) 그 기록 내용이 채워져 있고, 종류는 못 바꾼다. 저장하면 취소 + 새 기록이 된다 (10단계).
 
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { DEFAULT_CYCLE_DAYS } from '../config/farm'
-import { addRecord, type NewRecord } from '../data/recordRepository'
-import { addDays, getHouseStatus, lastHarvestRecord, problemKey } from '../domain/harvestCalc'
+import { addRecord, editRecord, type NewRecord } from '../data/recordRepository'
+import { addDays, getHouseStatus, lastHarvestRecord, problemKey, problemOf } from '../domain/harvestCalc'
 import { fertilizerNames, lastUsedAmount, latestHarvestAmount, pesticideNames, problemNames } from '../domain/recordQueries'
-import type { AmountType, FarmRecord, House, HouseProblem, Problem } from '../domain/types'
+import type { AmountType, FarmRecord, House, HouseProblem, Problem, RecordType } from '../domain/types'
 import { PROBLEM_TAG, formatBags, formatDate, problemTag, relativeDay } from './labels'
 import './RecordForm.css'
 
@@ -29,6 +30,17 @@ const HARVEST_STEP_BUTTONS: { step: HarvestStep; label: string }[] = [
   { step: 'harvest', label: '완료' },
   { step: 'harvest_amount', label: '수확량' },
 ]
+
+/** 수정할 때 "무엇을 했나요?" 자리에 쓰는 종류 이름 (종류 버튼 대신) */
+const TYPE_LABEL: Record<Exclude<RecordType, 'cancel'>, string> = {
+  spray: '약',
+  top_dressing: '비료',
+  fertigation: '관비',
+  harvest_start: '수확 시작',
+  harvest: '수확 완료',
+  harvest_amount: '수확량',
+  problem: '문제',
+}
 
 const PROBLEMS: HouseProblem[] = ['drainage', 'mycelium']
 
@@ -177,30 +189,95 @@ function BagsField({ value, onChange }: { value: string; onChange: (value: strin
   )
 }
 
+/** 입력 화면에서 고르고 적는 값 (숫자도 칸에 적은 글자 그대로) */
+interface FormValues {
+  workDate: string
+  kind: Kind | null
+  pesticide: string
+  fertilizer: string
+  amount: string
+  harvestStep: HarvestStep | null
+  cycleDays: string
+  boxes: string
+  bunches: string
+  problem: Problem | null
+  problemName: string
+  resolved: boolean | null
+}
+
+/** 숫자 → 칸에 넣을 글자. 안 적었으면(null, 그 항목이 생기기 전 기록이면 undefined) 빈칸 */
+function toText(n: number | null | undefined): string {
+  return n === null || n === undefined ? '' : String(n)
+}
+
+/** 처음 값. 새 기록이면 날짜만 오늘이고 나머지는 비어 있다. 수정할 기록이 있으면 그 기록 내용을 채운다 */
+function initialValues(editing: FarmRecord | undefined, today: string): FormValues {
+  const empty: FormValues = {
+    workDate: today,
+    kind: null,
+    pesticide: '',
+    fertilizer: '',
+    amount: '',
+    harvestStep: null,
+    cycleDays: String(DEFAULT_CYCLE_DAYS),
+    boxes: '',
+    bunches: '',
+    problem: null,
+    problemName: '',
+    resolved: null,
+  }
+  if (editing === undefined) return empty
+
+  const v = { ...empty, workDate: editing.work_date }
+  switch (editing.type) {
+    case 'spray':
+      return { ...v, kind: 'spray', pesticide: editing.pesticide ?? '', amount: toText(editing.amount_ml) }
+    case 'top_dressing':
+      return { ...v, kind: 'top_dressing', fertilizer: editing.fertilizer ?? '', amount: toText(editing.bags) }
+    case 'fertigation':
+      return { ...v, kind: 'fertigation', fertilizer: editing.fertilizer ?? '', amount: toText(editing.amount_ml) }
+    case 'harvest_start':
+      return { ...v, kind: 'harvest', harvestStep: 'harvest_start' }
+    case 'harvest':
+      return { ...v, kind: 'harvest', harvestStep: 'harvest', cycleDays: String(editing.cycle_days) }
+    case 'harvest_amount':
+      return { ...v, kind: 'harvest', harvestStep: 'harvest_amount', boxes: toText(editing.boxes), bunches: toText(editing.bunches) }
+    case 'problem': {
+      const p = problemOf(editing)
+      return { ...v, kind: 'problem', problem: p, problemName: p?.kind === 'other' ? p.name : '', resolved: editing.resolved }
+    }
+    case 'cancel':
+      return v // 취소 기록은 이력에 나오지 않아 수정할 일이 없다
+  }
+}
+
 interface Props {
   house: House
   records: readonly FarmRecord[]
   today: string
-  /** 저장이 끝나면 부른다. message는 목록 화면에 잠깐 띄울 글자 */
+  /** 이력의 [수정]으로 열었으면 수정할 기록. 없으면 새 기록을 적는다 */
+  editing?: FarmRecord
+  /** 저장이 끝나면 부른다. message는 앞 화면(목록, 수정이면 이력)에 잠깐 띄울 글자 */
   onSaved: (message: string) => void
   onCancel: () => void
   /** "지난 기록" 버튼을 누르면 부른다 (이력 화면은 App이 연다) */
   onOpenHistory: () => void
 }
 
-export default function RecordForm({ house, records, today, onSaved, onCancel, onOpenHistory }: Props) {
-  const [workDate, setWorkDate] = useState(today)
-  const [kind, setKind] = useState<Kind | null>(null)
-  const [pesticide, setPesticide] = useState('')
-  const [fertilizer, setFertilizer] = useState('')
-  const [amount, setAmount] = useState('') // 약·관비는 ml, 비료는 포. 종류를 바꾸면 비운다 (단위가 달라서)
-  const [harvestStep, setHarvestStep] = useState<HarvestStep | null>(null)
-  const [cycleDays, setCycleDays] = useState(String(DEFAULT_CYCLE_DAYS))
-  const [boxes, setBoxes] = useState('')
-  const [bunches, setBunches] = useState('')
-  const [problem, setProblem] = useState<Problem | null>(null)
-  const [problemName, setProblemName] = useState('') // "다른 문제" 칸에 적은 글자
-  const [resolved, setResolved] = useState<boolean | null>(null)
+export default function RecordForm({ house, records, today, editing, onSaved, onCancel, onOpenHistory }: Props) {
+  const [init] = useState(() => initialValues(editing, today)) // 처음 그릴 때 한 번만 만든다
+  const [workDate, setWorkDate] = useState(init.workDate)
+  const [kind, setKind] = useState<Kind | null>(init.kind)
+  const [pesticide, setPesticide] = useState(init.pesticide)
+  const [fertilizer, setFertilizer] = useState(init.fertilizer)
+  const [amount, setAmount] = useState(init.amount) // 약·관비는 ml, 비료는 포. 종류를 바꾸면 비운다 (단위가 달라서)
+  const [harvestStep, setHarvestStep] = useState<HarvestStep | null>(init.harvestStep)
+  const [cycleDays, setCycleDays] = useState(init.cycleDays)
+  const [boxes, setBoxes] = useState(init.boxes)
+  const [bunches, setBunches] = useState(init.bunches)
+  const [problem, setProblem] = useState<Problem | null>(init.problem)
+  const [problemName, setProblemName] = useState(init.problemName) // "다른 문제" 칸에 적은 글자
+  const [resolved, setResolved] = useState<boolean | null>(init.resolved)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const detailRef = useRef<HTMLElement>(null) // 종류를 고르면 나타나는 자세한 내용 카드
@@ -208,10 +285,13 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
 
   // 고른 뒤 새로 나타난 내용이 화면 아래(저장 버튼 뒤)에 숨지 않도록 보이는 곳까지 스크롤한다
   // 문제는 "골랐는지"만 본다. 이름을 적을 때마다 스크롤하지 않게 (글자마다 problem이 새 값이 된다)
+  // 수정할 때는 처음부터 다 채워져 있어서 스크롤하지 않는다 (날짜부터 보이게)
   const problemChosen = problem !== null
+  const isEditing = editing !== undefined
   useEffect(() => {
+    if (isEditing) return
     detailRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-  }, [kind, harvestStep, problemChosen])
+  }, [isEditing, kind, harvestStep, problemChosen])
 
   const currentProblems = getHouseStatus(records, house.no, today).problems
   /** 문제 버튼: 배수·균사, 그다음 전에 직접 적은 문제 (최근 순) */
@@ -221,6 +301,9 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
   ]
   const isCurrent = (p: Problem) => currentProblems.some((c) => problemKey(c) === problemKey(p))
   const lastHarvest = lastHarvestRecord(records, house.no)
+  // 수확량을 붙일 수확 완료 기록: 새로 적으면 그 동의 마지막 수확, 수확량을 수정하면 원래 붙어 있던 수확
+  const amountTarget =
+    editing?.type === 'harvest_amount' ? (records.find((r) => r.id === editing.target_id) ?? null) : lastHarvest
   const lastAmount = lastHarvest === null ? null : latestHarvestAmount(records, lastHarvest.id)
 
   // 날짜 칸을 비우거나 앞날을 고르면 저장하지 않는다
@@ -232,7 +315,7 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
   /** 지금 고른 내용으로 만든 새 기록과 저장 뒤 보여줄 이름. 아직 덜 골랐으면 null (저장 버튼이 꺼진다) */
   function buildRecord(): { record: NewRecord; label: string } | null {
     if (!dateOk) return null
-    const base = { house_no: house.no, work_date: workDate, memo: null }
+    const base = { house_no: house.no, work_date: workDate, memo: editing?.memo ?? null }
 
     const used = toAmount(amount)
     switch (kind) {
@@ -264,9 +347,9 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
         if (harvestStep === 'harvest' && cycle >= 1) {
           return { record: { ...base, type: 'harvest', cycle_days: cycle }, label: '수확 완료' }
         }
-        if (harvestStep === 'harvest_amount' && lastHarvest !== null && boxCount + bunchCount > 0) {
+        if (harvestStep === 'harvest_amount' && amountTarget !== null && boxCount + bunchCount > 0) {
           return {
-            record: { ...base, type: 'harvest_amount', target_id: lastHarvest.id, boxes: boxCount, bunches: bunchCount },
+            record: { ...base, type: 'harvest_amount', target_id: amountTarget.id, boxes: boxCount, bunches: bunchCount },
             label: '수확량',
           }
         }
@@ -293,8 +376,13 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
     setSaving(true) // 두 번 눌러 같은 기록이 두 개 생기지 않게 저장하는 동안 버튼을 끈다
     setError(null)
     try {
-      await addRecord(built.record)
-      onSaved(`${house.no}동 ${built.label} 저장했어요`)
+      if (editing === undefined) {
+        await addRecord(built.record)
+        onSaved(`${house.no}동 ${built.label} 저장했어요`)
+      } else {
+        await editRecord(editing, built.record, today)
+        onSaved(`${house.no}동 ${built.label} 수정했어요`)
+      }
     } catch {
       setError('저장하지 못했어요. 다시 눌러 주세요.')
       setSaving(false)
@@ -361,16 +449,18 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
     <main className="record-form">
       <div className="top-bar">
         <button type="button" className="text-button" onClick={onCancel}>
-          ‹ 목록
+          {isEditing ? '‹ 지난 기록' : '‹ 목록'}
         </button>
-        <button type="button" className="text-button" onClick={onOpenHistory}>
-          지난 기록 ›
-        </button>
+        {!isEditing && (
+          <button type="button" className="text-button" onClick={onOpenHistory}>
+            지난 기록 ›
+          </button>
+        )}
       </div>
 
       <header className="page-header">
         <p>{house.zone}</p>
-        <h1>{house.no}동 기록</h1>
+        <h1>{house.no}동 {isEditing ? '기록 수정' : '기록'}</h1>
       </header>
 
       <form onSubmit={handleSubmit}>
@@ -399,13 +489,21 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
 
         <section className="form-card">
           <h2 className="field-label">무엇을 했나요?</h2>
-          <div className="choices choices-3">
-            {KIND_BUTTONS.map((b) => (
-              <Choice key={b.kind} selected={kind === b.kind} onClick={() => chooseKind(b.kind)}>
-                {b.label}
-              </Choice>
-            ))}
-          </div>
+          {editing !== undefined && editing.type !== 'cancel' ? (
+            // 수정할 때는 종류를 못 바꾼다. 버튼 대신 종류 이름만 보여 준다
+            <>
+              <p className="fixed-kind">{TYPE_LABEL[editing.type]}</p>
+              <p className="field-note">종류가 틀렸으면 지난 기록에서 [취소]하고 새로 적어 주세요.</p>
+            </>
+          ) : (
+            <div className="choices choices-3">
+              {KIND_BUTTONS.map((b) => (
+                <Choice key={b.kind} selected={kind === b.kind} onClick={() => chooseKind(b.kind)}>
+                  {b.label}
+                </Choice>
+              ))}
+            </div>
+          )}
         </section>
 
         {kind === 'spray' && (
@@ -444,13 +542,16 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
 
         {kind === 'harvest' && (
           <section className="form-card" ref={detailRef}>
-            <div className="choices choices-3">
-              {HARVEST_STEP_BUTTONS.map((b) => (
-                <Choice key={b.step} selected={harvestStep === b.step} onClick={() => setHarvestStep(b.step)}>
-                  {b.label}
-                </Choice>
-              ))}
-            </div>
+            {/* 시작·완료·수확량도 종류라서 수정할 때는 못 바꾼다 */}
+            {!isEditing && (
+              <div className="choices choices-3">
+                {HARVEST_STEP_BUTTONS.map((b) => (
+                  <Choice key={b.step} selected={harvestStep === b.step} onClick={() => setHarvestStep(b.step)}>
+                    {b.label}
+                  </Choice>
+                ))}
+              </div>
+            )}
 
             {harvestStep === 'harvest_start' && (
               <p className="field-note">하루에 다 못 벨 때 눌러요. 다 벤 날 "수확 완료"를 눌러 주세요.</p>
@@ -488,11 +589,11 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
             )}
 
             {harvestStep === 'harvest_amount' &&
-              (lastHarvest === null ? (
+              (amountTarget === null ? (
                 <p className="field-error">수확 완료 기록이 없어요. "수확 완료"를 먼저 저장해 주세요.</p>
               ) : (
                 <>
-                  <p className="field-note">{formatDate(lastHarvest.work_date)}에 끝낸 수확, 전체 양을 적어 주세요</p>
+                  <p className="field-note">{formatDate(amountTarget.work_date)}에 끝낸 수확, 전체 양을 적어 주세요</p>
                   <div className="amounts">
                     <label>
                       <input
@@ -515,7 +616,7 @@ export default function RecordForm({ house, records, today, onSaved, onCancel, o
                       단
                     </label>
                   </div>
-                  {lastAmount !== null && (
+                  {!isEditing && lastAmount !== null && (
                     <p className="field-note">
                       이미 적은 양: {lastAmount.boxes}박스 {lastAmount.bunches}단. 다시 저장하면 새로 적은 양으로 바뀌어요.
                     </p>

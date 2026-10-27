@@ -1,5 +1,6 @@
 // 이력 화면. 한 동의 기록을 최근 순으로, 날짜별로 묶어 보여준다. 기록 입력 화면의 "지난 기록"에서 열린다.
 // 잘못 입력한 기록은 줄마다 [취소]로 취소한다. 기록을 지우지 않고 cancel 기록을 추가한다 (CLAUDE.md 데이터 규칙).
+// [수정]은 그 기록 내용이 채워진 기록 입력 화면을 연다 (App이 연다. 저장하면 취소 + 새 기록, 10단계).
 // 줄마다 입력한 사람("아버지")을 아랫줄에 작게 쓴다. 이름은 Supabase profiles 표에서 받아 둔 것이다 (6-6).
 
 import { useEffect, useRef, useState } from 'react'
@@ -81,9 +82,11 @@ interface Props {
   onBack: () => void
   /** 기록을 취소하면 부른다. message는 화면 아래에 잠깐 띄울 글자 */
   onCanceled: (message: string) => void
+  /** [수정]을 누르면 부른다 */
+  onEdit: (recordId: string) => void
 }
 
-export default function History({ house, records, profiles, today, onBack, onCanceled }: Props) {
+export default function History({ house, records, profiles, today, onBack, onCanceled, onEdit }: Props) {
   // [취소]를 한 번 누른 기록 id. 그 줄에 "취소할까요?"를 묻는다 (장갑 낀 손으로 잘못 눌러도 바로 취소되지 않게)
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -129,7 +132,7 @@ export default function History({ house, records, profiles, today, onBack, onCan
       {groups.length === 0 ? (
         <p className="history-empty">아직 기록이 없어요</p>
       ) : (
-        <p className="history-hint">잘못 적은 기록은 [취소]를 누르세요</p>
+        <p className="history-hint">잘못 적은 기록은 [수정]이나 [취소]를 누르세요</p>
       )}
 
       {groups.map((group) => (
@@ -158,16 +161,21 @@ export default function History({ house, records, profiles, today, onBack, onCan
                       <span className="history-note">{byline}</span>
                     </span>
                     {!confirming && (
-                      <button
-                        type="button"
-                        className="history-cancel"
-                        onClick={() => {
-                          setConfirmingId(r.id)
-                          setError(null)
-                        }}
-                      >
-                        취소
-                      </button>
+                      <span className="history-actions">
+                        <button type="button" className="history-action" onClick={() => onEdit(r.id)}>
+                          수정
+                        </button>
+                        <button
+                          type="button"
+                          className="history-action"
+                          onClick={() => {
+                            setConfirmingId(r.id)
+                            setError(null)
+                          }}
+                        >
+                          취소
+                        </button>
+                      </span>
                     )}
                   </div>
                   {confirming && (

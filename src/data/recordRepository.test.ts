@@ -3,8 +3,10 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getCurrentUser } from './auth'
-import { db } from './db'
-import { LOCAL_USER_ID, addRecord, getAllRecords, removeTestRecords } from './recordRepository'
+import { db, type StoredRecord } from './db'
+import { getHouseStatus } from '../domain/harvestCalc'
+import { houseHistory, latestHarvestAmount } from '../domain/recordQueries'
+import { LOCAL_USER_ID, addRecord, editRecord, getAllRecords, removeTestRecords } from './recordRepository'
 import { uploadPending } from './syncService'
 
 // 로그인은 진짜 Supabase가 필요해서, "이 폰에서 로그인한 사람"을 돌려주는 함수만 가짜로 바꾼다.
@@ -54,6 +56,72 @@ describe('addRecord', () => {
     vi.mocked(getCurrentUser).mockReturnValue(null)
     await expect(addRecord({ type: 'fertigation', house_no: 1, work_date: '2026-10-22', memo: null })).rejects.toThrow()
     expect(await getAllRecords()).toHaveLength(0)
+  })
+})
+
+describe('editRecord', () => {
+  const TODAY = '2026-10-27'
+
+  it('원래 기록의 취소 + 새 기록을 추가하고, 이력에는 새 기록만 보인다', async () => {
+    const original = await addRecord({ type: 'spray', house_no: 3, work_date: '2026-10-25', pesticide: '가약', amount_ml: 20, memo: null })
+
+    const edited = await editRecord(original, { type: 'spray', house_no: 3, work_date: '2026-10-26', pesticide: '나약', amount_ml: 30, memo: null }, TODAY)
+
+    const all = await getAllRecords()
+    expect(all).toHaveLength(3) // 원래 기록은 그대로 남는다 (바꾸거나 지우지 않음)
+    expect(all.find((r) => r.id === original.id)).toEqual({ ...original, synced: 0 })
+    expect(all).toContainEqual(
+      expect.objectContaining({ type: 'cancel', target_id: original.id, work_date: TODAY, recorded_by: USER_ID, synced: 0 }),
+    )
+    expect(houseHistory(all, 3)).toEqual([expect.objectContaining({ id: edited.id, work_date: '2026-10-26', pesticide: '나약', amount_ml: 30 })])
+  })
+
+  it('새 기록은 원래 기록의 입력 시각을 이어받아, 같은 날 기록끼리의 순서가 바뀌지 않는다', async () => {
+    // 같은 날 아침에 시작, 저녁에 완료
+    const base = { house_no: 5, work_date: '2026-10-26', memo: null, recorded_by: USER_ID, synced: 1 } as const
+    const start: StoredRecord = { ...base, id: '33333333-3333-4333-8333-333333333333', type: 'harvest_start', recorded_at: '2026-10-25T23:00:00.000Z' }
+    const harvest: StoredRecord = { ...base, id: '44444444-4444-4444-8444-444444444444', type: 'harvest', cycle_days: 35, recorded_at: '2026-10-26T09:00:00.000Z' }
+    await db.records.bulkAdd([start, harvest])
+
+    // 바꾼 것 없이 저장해도, 수확 시작이 완료보다 나중이 되어 "수확 중"으로 보이면 안 된다
+    const edited = await editRecord(start, { type: 'harvest_start', house_no: 5, work_date: '2026-10-26', memo: null }, TODAY)
+
+    expect(edited.recorded_at).toBe(start.recorded_at)
+    expect(getHouseStatus(await getAllRecords(), 5, TODAY).kind).not.toBe('harvesting')
+  })
+
+  it('수확 완료를 수정하면 그 수확량이 새 수확 완료 기록으로 옮겨진다', async () => {
+    const harvest = await addRecord({ type: 'harvest', house_no: 7, work_date: '2026-10-25', cycle_days: 35, memo: null })
+    await addRecord({ type: 'harvest_amount', house_no: 7, work_date: '2026-10-26', target_id: harvest.id, boxes: 3, bunches: 5, memo: null })
+
+    const edited = await editRecord(harvest, { type: 'harvest', house_no: 7, work_date: '2026-10-24', cycle_days: 40, memo: null }, TODAY)
+
+    const all = await getAllRecords()
+    expect(latestHarvestAmount(all, harvest.id)).toBeNull() // 원래 수확은 취소됐다
+    expect(latestHarvestAmount(all, edited.id)).toEqual(
+      expect.objectContaining({ boxes: 3, bunches: 5, work_date: '2026-10-26', house_no: 7 }),
+    )
+  })
+
+  it('수확량이 없는 수확 완료를 수정하면 수확량을 만들지 않는다', async () => {
+    const harvest = await addRecord({ type: 'harvest', house_no: 7, work_date: '2026-10-25', cycle_days: 35, memo: null })
+    await editRecord(harvest, { type: 'harvest', house_no: 7, work_date: '2026-10-25', cycle_days: 30, memo: null }, TODAY)
+    expect((await getAllRecords()).filter((r) => r.type === 'harvest_amount')).toHaveLength(0)
+  })
+
+  it('종류는 바꿀 수 없고, 아무것도 저장하지 않는다', async () => {
+    const original = await addRecord({ type: 'spray', house_no: 3, work_date: '2026-10-25', pesticide: null, memo: null })
+    await expect(
+      editRecord(original, { type: 'fertigation', house_no: 3, work_date: '2026-10-25', memo: null }, TODAY),
+    ).rejects.toThrow()
+    expect(await getAllRecords()).toHaveLength(1)
+  })
+
+  it('저장한 뒤 서버로 올리기를 시작한다', async () => {
+    const original = await addRecord({ type: 'fertigation', house_no: 1, work_date: '2026-10-22', memo: null })
+    vi.mocked(uploadPending).mockClear()
+    await editRecord(original, { type: 'fertigation', house_no: 1, work_date: '2026-10-23', memo: null }, TODAY)
+    expect(uploadPending).toHaveBeenCalledTimes(1)
   })
 })
 

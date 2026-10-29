@@ -21,7 +21,7 @@ Spring MVC + Thymeleaf와 흐름을 비교하면 이렇다.
 
 ```tsx
 const [kind, setKind] = useState<Kind | null>(null)
-const [pesticide, setPesticide] = useState('')
+const [typedName, setTypedName] = useState('')
 ```
 
 - `useState(처음 값)`은 **[지금 값, 값을 바꾸는 함수]** 두 개짜리 배열을 돌려준다
@@ -73,19 +73,19 @@ HTML의 `<button onclick="...">`과 같은데, 글자가 아니라 **함수**를
 ### 적기: `value` + `onChange`
 
 ```tsx
-<input value={pesticide} onChange={(e) => setPesticide(e.target.value)} />
+<input value={typedName} onChange={(e) => setTypedName(e.target.value)} />
 ```
 
-- `value={pesticide}`: 칸에 보이는 글자는 **항상 상태 값**이다
+- `value={typedName}`: 칸에 보이는 글자는 **항상 상태 값**이다
 - `onChange`: 글자를 칠 때마다 불린다. `e.target.value`가 칸의 새 글자다. 그걸 상태에 넣으면 → 다시 그려지고 → 칸에 보인다
-- 이렇게 상태와 칸을 묶은 걸 **제어 컴포넌트(controlled input)**라고 한다. Thymeleaf의 `th:field="*{pesticide}"`가 칸과 폼 객체를 묶는 것과 목적이 같다. 다만 Thymeleaf는 제출할 때 한 번 묶고, React는 한 글자마다 묶는다
+- 이렇게 상태와 칸을 묶은 걸 **제어 컴포넌트(controlled input)**라고 한다. Thymeleaf의 `th:field="*{typedName}"`가 칸과 폼 객체를 묶는 것과 목적이 같다. 다만 Thymeleaf는 제출할 때 한 번 묶고, React는 한 글자마다 묶는다
 - 그래서 **글자를 고쳐서 넣을 수 있다.** 숫자 칸은 이렇게 쓴다
 
   ```tsx
   onChange={(e) => setBoxes(digitsOnly(e.target.value, 4))}  // 숫자 아닌 글자는 지우고 넣음
   ```
 
-- 약 이름 버튼을 누르면 `setPesticide('가약')`만 하면 칸에도 "가약"이 들어간다. 칸과 버튼이 같은 상태 하나를 보기 때문이다
+- 기록을 수정할 때 약 이름 버튼을 누르면 `setTypedName('가약')`만 하면 칸에도 "가약"이 들어가고 버튼도 초록이 된다. 칸과 버튼이 같은 상태 하나를 보기 때문이다 (새 기록에서 여러 개 고를 때는 버튼이 따로 목록을 가진다, 8번)
 
 ## 4. 계산할 수 있는 값은 상태로 두지 않는다
 
@@ -96,7 +96,7 @@ const [workDate, setWorkDate] = useState(today)
 // 계산값: 그릴 때마다 새로 계산
 const currentProblems = getHouseStatus(records, house.no, today).problems
 const dateOk = workDate !== '' && workDate <= today
-const built = buildRecord()
+const built = buildRecords()
 ```
 
 지금 있는 문제나 "저장할 수 있는지"를 상태로 두면, 기록이나 날짜가 바뀔 때마다 그 상태도 같이 고쳐 줘야 한다. 하나라도 잊으면 화면이 틀린다. **다른 값에서 계산할 수 있는 건 그냥 계산한다.** 함수가 다시 실행될 때마다 새로 계산되니 항상 맞다.
@@ -176,7 +176,7 @@ IndexedDB에 저장하는 일은 바로 끝나지 않는다. JS는 화면을 멈
 async function handleSubmit(e: FormEvent) {
   ...
   try {
-    await addRecord(built.record)          // 저장이 끝날 때까지 여기서 기다림
+    await addRecords(built.records)        // 저장이 끝날 때까지 여기서 기다림
     onSaved(`${house.no}동 ${built.label} 저장했어요`)
   } catch {
     setError('저장하지 못했어요. 다시 눌러 주세요.')
@@ -220,6 +220,48 @@ new RecordForm(house, records, today, listener);
 ```
 
 이름을 `on...`으로 짓는 건 "...가 일어나면 불린다"는 관례다 (`onClick`, `onChange`와 같은 모양).
+
+## 8. 배열·객체 상태는 새로 만들어 바꾼다 (12단계)
+
+12단계에서 약 이름을 여러 개 고르게 하면서, 상태에 글자 하나가 아니라 **배열**(고른 이름들)과 **객체**(이름마다 양)를 담았다.
+
+```tsx
+const [picked, setPicked] = useState<string[]>([])                          // ['가약', '나약']
+const [pickedAmounts, setPickedAmounts] = useState<Record<string, string>>({})  // { 가약: '20', 나약: '' }
+
+setPicked([...picked, name])                         // 하나 더하기
+setPicked(picked.filter((n) => n !== name))          // 하나 빼기
+setPickedAmounts({ ...pickedAmounts, [name]: '20' }) // 한 이름의 양만 바꾸기
+```
+
+### 왜 `picked.push(name)`이 아닌가
+
+React는 **"전과 같은 배열(객체)인가"**를 보고 다시 그릴지 정한다. 내용이 아니라 **같은 물건인지**(Java의 `==`)를 본다. `picked.push(name)` 뒤에 `setPicked(picked)`를 하면 배열 안은 바뀌었어도 같은 물건이라 React는 "안 바뀌었다"고 보고 화면을 안 고친다. 그래서 **새 배열을 만들어** 넘긴다. 1번의 "상태는 직접 바꾸지 않는다"와 같은 규칙이다.
+
+| 하는 일 | JS (새로 만들기) | Java로 쓰면 |
+|---|---|---|
+| 하나 더하기 | `[...picked, name]` | `var next = new ArrayList<>(picked); next.add(name);` |
+| 하나 빼기 | `picked.filter((n) => n !== name)` | `picked.stream().filter(n -> !n.equals(name)).toList()` |
+| 한 칸만 바꾸기 | `{ ...amounts, [name]: v }` | `var next = new HashMap<>(amounts); next.put(name, v);` |
+
+- `...picked`: **전개 문법.** 배열 안의 것을 그 자리에 펼쳐 놓는다. `[...['가약'], '나약']` → `['가약', '나약']`. 객체도 같다 (`{ ...base, type: 'spray' }`, [[2026-10-22-Vitest-테스트와-순수-함수]] 3번)
+- `!==`: "같지 않다". JS는 `==`가 글자 `'1'`과 숫자 `1`을 같다고 보는 등 헷갈려서, 늘 `===`·`!==`를 쓴다. 글자끼리는 Java의 `equals`처럼 내용을 비교한다
+- `[name]: '20'`: **계산된 키.** 객체 칸 이름을 변수 값으로 정한다. `name`이 `'가약'`이면 `{ 가약: '20' }`이다. 대괄호 없이 `name: '20'`이라 쓰면 칸 이름이 진짜로 `"name"`이 된다. Java의 `map.put(name, "20")`
+- `Record<string, string>`: "글자 키 → 글자 값" 객체 타입. Java의 `Map<String, String>`. 이름(키)이 미리 정해져 있지 않을 때 쓴다 (`TYPE_LABEL`의 `Record<RecordType, string>`은 키가 정해져 있는 경우, [[2026-10-22-React-컴포넌트와-props]])
+- `pickedAmounts[name] ?? ''`: 그 이름의 양을 꺼낸다. 없으면 `undefined`라 `??`로 빈 글자를 쓴다. Java의 `map.getOrDefault(name, "")`
+
+### set 함수에 함수를 넘기기
+
+```tsx
+setAmount: (value: string) => setPickedAmounts((a) => ({ ...a, [name]: value })),
+```
+
+`setPickedAmounts(새 값)` 대신 `setPickedAmounts((a) => 새 값)`처럼 **"지금 값을 받아 새 값을 만드는 함수"**를 넘길 수 있다. React가 그 순간의 진짜 지금 값(`a`)을 넣어 준다.
+
+이 줄은 이름마다 만든 "양 바꾸는 함수"인데, 그릴 때 만들어 두고 나중에(글자를 칠 때) 불린다. 바깥의 `pickedAmounts`를 쓰면 **만들 때 값**을 쓰게 된다 (클로저, [[2026-10-22-3단계-코드-읽기]] 7번). 지금 코드는 그릴 때마다 이 함수를 새로 만들어서 바깥 값을 써도 맞지만, 만들 때와 불릴 때가 떨어진 함수라 "불릴 때의 지금 값"을 받는 쪽으로 썼다. 나중에 코드를 고쳐도 옛 값을 볼 걱정이 없다. Java로 치면 `map.compute(...)`처럼 "지금 값을 받아 고치는" 쪽이다.
+
+- `(a) => ({ ... })`: 객체를 바로 돌려주는 화살표 함수는 **괄호로 감싼다.** `(a) => { ... }`라고 쓰면 JS가 `{`를 함수 몸통 시작으로 읽는다
+- 버튼을 누를 때 한 번 바꾸는 곳(`setPicked([...picked, name])`)은 그 자리에서 바로 불리니 지금 값을 써도 된다
 
 ## 관련
 

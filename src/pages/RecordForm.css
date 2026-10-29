@@ -242,6 +242,44 @@
   font-weight: 700;
 }
 
+/* ---- 약·비료 이름 칸: [처음 치는 약이면 적어 주세요][더하기] ---- */
+
+.name-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+}
+
+.name-add .choice {
+  padding: 0.4rem 0.8rem;
+}
+
+.name-add .choice:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* ---- 섞어 친 약·비료의 양: 이름마다 "가약 [ 20 ] ml" ---- */
+
+.amount-name {
+  align-self: center;
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere; /* 긴 약 이름이 칸 밖으로 나가지 않게 */
+}
+
+/* 비료 포 수는 이름마다 [반 포][1포][2포][3포] + 칸이라, 이름끼리 선으로 나눈다 */
+.bags-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.bags-field + .bags-field {
+  padding-top: 0.6rem;
+  border-top: 2px solid var(--line);
+}
+
 /* ---- 저장 ----
    화면 아래에 붙여 둔다 (sticky). 내용이 길어 스크롤해도 저장 버튼은 항상 보인다 */
 

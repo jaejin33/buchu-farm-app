@@ -6,7 +6,7 @@ import { getCurrentUser } from './auth'
 import { db, type StoredRecord } from './db'
 import { getHouseStatus } from '../domain/harvestCalc'
 import { houseHistory, latestHarvestAmount } from '../domain/recordQueries'
-import { LOCAL_USER_ID, addRecord, editRecord, getAllRecords, removeTestRecords } from './recordRepository'
+import { LOCAL_USER_ID, addRecord, addRecords, editRecord, getAllRecords, removeTestRecords } from './recordRepository'
 import { uploadPending } from './syncService'
 
 // 로그인은 진짜 Supabase가 필요해서, "이 폰에서 로그인한 사람"을 돌려주는 함수만 가짜로 바꾼다.
@@ -56,6 +56,39 @@ describe('addRecord', () => {
     vi.mocked(getCurrentUser).mockReturnValue(null)
     await expect(addRecord({ type: 'fertigation', house_no: 1, work_date: '2026-10-22', memo: null })).rejects.toThrow()
     expect(await getAllRecords()).toHaveLength(0)
+  })
+})
+
+describe('addRecords', () => {
+  it('섞어 친 약을 이름마다 기록 하나씩, 같은 입력 시각으로 한 번에 저장한다', async () => {
+    vi.mocked(uploadPending).mockClear()
+    const saved = await addRecords([
+      { type: 'spray', house_no: 3, work_date: '2026-10-29', pesticide: '가약', amount_ml: 20, memo: null },
+      { type: 'spray', house_no: 3, work_date: '2026-10-29', pesticide: '나약', amount_ml: null, memo: null },
+    ])
+
+    expect(saved.map((r) => r.type === 'spray' && r.pesticide)).toEqual(['가약', '나약'])
+    expect(saved[0].id).not.toBe(saved[1].id)
+    expect(saved[0].recorded_at).toBe(saved[1].recorded_at)
+    expect(saved.every((r) => r.recorded_by === USER_ID)).toBe(true)
+    expect(await getAllRecords()).toHaveLength(2)
+    expect(uploadPending).toHaveBeenCalledTimes(1) // 올리기는 한 번만 시작한다
+  })
+
+  it('하나라도 저장하지 못하면 아무것도 남기지 않는다', async () => {
+    const existing = await addRecord({ type: 'spray', house_no: 3, work_date: '2026-10-28', pesticide: '가약', memo: null })
+    // 같은 id가 이미 있게 만들어 두 번째 기록이 실패하게 한다
+    const ids = ['22222222-2222-4222-8222-222222222222', existing.id]
+    const spy = vi.spyOn(crypto, 'randomUUID').mockImplementation(() => ids.shift() as ReturnType<Crypto['randomUUID']>)
+
+    await expect(
+      addRecords([
+        { type: 'spray', house_no: 3, work_date: '2026-10-29', pesticide: '가약', memo: null },
+        { type: 'spray', house_no: 3, work_date: '2026-10-29', pesticide: '나약', memo: null },
+      ]),
+    ).rejects.toThrow()
+    spy.mockRestore()
+    expect(await getAllRecords()).toEqual([{ ...existing, synced: 0 }])
   })
 })
 

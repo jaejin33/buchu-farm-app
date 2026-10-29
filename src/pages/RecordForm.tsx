@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { DEFAULT_CYCLE_DAYS } from '../config/farm'
-import { addRecord, editRecord, type NewRecord } from '../data/recordRepository'
+import { addRecords, editRecord, type NewRecord } from '../data/recordRepository'
 import { addDays, getHouseStatus, lastHarvestRecord, problemKey, problemOf } from '../domain/harvestCalc'
 import {
   fertilizerNames,
@@ -104,73 +104,95 @@ function Choice({ selected, onClick, children }: { selected: boolean; onClick: (
 
 /**
  * 약·비료 이름 고르기·적기 (안 적어도 된다). 지난 기록의 이름(known)은 버튼으로 고르고, 다시 누르면 풀린다.
- * 처음 쓰는 이름은 아래 칸에 적는다.
- * 버튼으로 고르면 onPick(풀면 ''), 칸에 적으면 onChange를 부른다 (고를 때만 양을 미리 채우려고 나눈다)
+ * 처음 쓰는 이름은 아래 칸에 적는다. 칸에 적은 이름도 고른 것으로 친다 ([더하기]를 안 눌러도 저장된다).
+ * 12단계부터 섞어 친 약·비료를 여러 개 고를 수 있다 (multiple). [더하기]는 적은 이름을 버튼으로 옮겨 칸을 비운다
+ * (처음 쓰는 이름을 둘 이상 적을 때). 수정할 때는 기록 하나라 하나만 고른다 (multiple = false)
  */
 function NamePicker({
   id,
   what,
   known,
   firstTimeHint,
-  value,
-  onChange,
-  onPick,
+  multiple,
+  picked,
+  typedName,
+  onToggle,
+  onType,
+  onAdd,
 }: {
   id: string
   what: string // "약", "비료"
   known: string[]
   firstTimeHint: string // 고를 이름이 있을 때 적는 칸의 안내 글자
-  value: string
-  onChange: (value: string) => void
-  onPick: (name: string) => void
+  multiple: boolean
+  picked: string[] // 버튼으로 고른 이름 (고른 순서)
+  typedName: string // 칸에 적은 글자
+  onToggle: (name: string) => void
+  onType: (value: string) => void
+  onAdd: () => void
 }) {
+  // [더하기]로 옮긴 처음 쓰는 이름은 아직 지난 기록에 없어서 앞에 붙인다
+  const chipNames = [...picked.filter((name) => !known.includes(name)), ...known]
+  const typed = typedName.trim()
   return (
     <>
       <label className="field-label" htmlFor={id}>
         {what} 이름 <span className="field-hint">(안 적어도 돼요)</span>
       </label>
-      {known.length > 0 && (
+      {multiple && chipNames.length > 0 && <p className="field-note">섞어서 줬으면 모두 눌러 주세요</p>}
+      {chipNames.length > 0 && (
         <div className="chips">
-          {known.map((name) => (
-            <Choice key={name} selected={value.trim() === name} onClick={() => onPick(value.trim() === name ? '' : name)}>
+          {chipNames.map((name) => (
+            <Choice key={name} selected={picked.includes(name) || typed === name} onClick={() => onToggle(name)}>
               {name}
             </Choice>
           ))}
         </div>
       )}
-      <input
-        id={id}
-        className="text-input"
-        type="text"
-        placeholder={known.length > 0 ? firstTimeHint : `${what} 이름`}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <div className={multiple ? 'name-add' : undefined}>
+        <input
+          id={id}
+          className="text-input"
+          type="text"
+          placeholder={chipNames.length > 0 ? firstTimeHint : `${what} 이름`}
+          value={typedName}
+          onChange={(e) => onType(e.target.value)}
+        />
+        {multiple && (
+          <button type="button" className="choice" disabled={typed === ''} onClick={onAdd}>
+            더하기
+          </button>
+        )}
+      </div>
     </>
   )
 }
 
-/** ml 적기 (정수, 안 적어도 된다): [ 20 ] ml */
-function MlField({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (value: string) => void }) {
+/** 저장할 이름 하나와 그 양 (칸에 적은 글자). 이름을 하나도 안 골랐으면 이름 없는 것(name = null) 하나다 */
+interface NameEntry {
+  key: string
+  name: string | null
+  amount: string
+  setAmount: (value: string) => void
+}
+
+/** ml 적기 (정수, 안 적어도 된다): [ 20 ] ml. 이름이 여럿이면 줄마다 "가약 [ 20 ] ml" */
+function MlInput({ entry }: { entry: NameEntry }) {
   return (
-    <>
-      <label className="field-label" htmlFor={id}>
-        {label} <span className="field-hint">(안 적어도 돼요)</span>
+    <div className="amounts">
+      {entry.name !== null && <span className="amount-name">{entry.name}</span>}
+      <label>
+        <input
+          className="text-input"
+          inputMode="numeric"
+          placeholder="0"
+          aria-label={entry.name === null ? '원액 양' : `${entry.name} 원액 양`}
+          value={entry.amount}
+          onChange={(e) => entry.setAmount(digitsOnly(e.target.value, 5))}
+        />
+        ml
       </label>
-      <div className="amounts">
-        <label>
-          <input
-            id={id}
-            className="text-input"
-            inputMode="numeric"
-            placeholder="0"
-            value={value}
-            onChange={(e) => onChange(digitsOnly(e.target.value, 5))}
-          />
-          ml
-        </label>
-      </div>
-    </>
+    </div>
   )
 }
 
@@ -213,17 +235,15 @@ function WaterTimeField({ minutes, onChange }: { minutes: number; onChange: (min
   )
 }
 
-/** 비료 포 수 (소수도, 안 적어도 된다). [반 포][1포][2포][3포]를 누르거나, 그보다 많으면 칸에 적는다 */
-function BagsField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const bags = toAmount(value)
+/** 비료 포 수 (소수도, 안 적어도 된다). [반 포][1포][2포][3포]를 누르거나, 그보다 많으면 칸에 적는다. 이름이 여럿이면 이름마다 */
+function BagsInput({ entry }: { entry: NameEntry }) {
+  const bags = toAmount(entry.amount)
   return (
-    <>
-      <label className="field-label" htmlFor="bags">
-        양 <span className="field-hint">(안 적어도 돼요)</span>
-      </label>
+    <div className="bags-field">
+      {entry.name !== null && <p className="amount-name">{entry.name}</p>}
       <div className="choices choices-4">
         {BAG_CHOICES.map((n) => (
-          <Choice key={n} selected={bags === n} onClick={() => onChange(bags === n ? '' : String(n))}>
+          <Choice key={n} selected={bags === n} onClick={() => entry.setAmount(bags === n ? '' : String(n))}>
             {formatBags(n)}
           </Choice>
         ))}
@@ -231,16 +251,30 @@ function BagsField({ value, onChange }: { value: string; onChange: (value: strin
       <div className="amounts">
         <label>
           <input
-            id="bags"
             className="text-input"
             inputMode="decimal"
             placeholder="다른 양"
-            value={value}
-            onChange={(e) => onChange(decimalOnly(e.target.value, 3))}
+            aria-label={entry.name === null ? '포 수' : `${entry.name} 포 수`}
+            value={entry.amount}
+            onChange={(e) => entry.setAmount(decimalOnly(e.target.value, 3))}
           />
           포
         </label>
       </div>
+    </div>
+  )
+}
+
+/** 양 적기: 약·관비는 원액 ml, 비료는 포. 고른 이름마다 한 칸씩 (안 고르면 한 칸) */
+function AmountFields({ unit, entries }: { unit: 'ml' | 'bags'; entries: NameEntry[] }) {
+  return (
+    <>
+      <h2 className="field-label">
+        {unit === 'ml' ? '원액 양' : '양'} <span className="field-hint">(안 적어도 돼요)</span>
+      </h2>
+      {entries.map((entry) =>
+        unit === 'ml' ? <MlInput key={entry.key} entry={entry} /> : <BagsInput key={entry.key} entry={entry} />,
+      )}
     </>
   )
 }
@@ -249,9 +283,8 @@ function BagsField({ value, onChange }: { value: string; onChange: (value: strin
 interface FormValues {
   workDate: string
   kind: Kind | null
-  pesticide: string
-  fertilizer: string
-  amount: string
+  typedName: string // 약·비료 이름 칸에 적은 글자
+  typedAmount: string // 칸에 적은 이름의 양. 이름이 하나도 없으면 이름 없는 기록의 양
   waterMinutes: number
   harvestStep: HarvestStep | null
   cycleDays: string
@@ -272,9 +305,8 @@ function initialValues(editing: FarmRecord | undefined, today: string): FormValu
   const empty: FormValues = {
     workDate: today,
     kind: null,
-    pesticide: '',
-    fertilizer: '',
-    amount: '',
+    typedName: '',
+    typedAmount: '',
     waterMinutes: DEFAULT_WATER_MINUTES,
     harvestStep: null,
     cycleDays: String(DEFAULT_CYCLE_DAYS),
@@ -286,14 +318,15 @@ function initialValues(editing: FarmRecord | undefined, today: string): FormValu
   }
   if (editing === undefined) return empty
 
+  // 수정할 기록의 이름은 칸에 넣는다 (지난 이름이라 그 버튼도 골라진 것으로 보인다)
   const v = { ...empty, workDate: editing.work_date }
   switch (editing.type) {
     case 'spray':
-      return { ...v, kind: 'spray', pesticide: editing.pesticide ?? '', amount: toText(editing.amount_ml) }
+      return { ...v, kind: 'spray', typedName: editing.pesticide ?? '', typedAmount: toText(editing.amount_ml) }
     case 'top_dressing':
-      return { ...v, kind: 'top_dressing', fertilizer: editing.fertilizer ?? '', amount: toText(editing.bags) }
+      return { ...v, kind: 'top_dressing', typedName: editing.fertilizer ?? '', typedAmount: toText(editing.bags) }
     case 'fertigation':
-      return { ...v, kind: 'fertigation', fertilizer: editing.fertilizer ?? '', amount: toText(editing.amount_ml) }
+      return { ...v, kind: 'fertigation', typedName: editing.fertilizer ?? '', typedAmount: toText(editing.amount_ml) }
     case 'water':
       return { ...v, kind: 'water', waterMinutes: editing.water_minutes ?? DEFAULT_WATER_MINUTES }
     case 'harvest_start':
@@ -328,9 +361,11 @@ export default function RecordForm({ house, records, today, editing, onSaved, on
   const [init] = useState(() => initialValues(editing, today)) // 처음 그릴 때 한 번만 만든다
   const [workDate, setWorkDate] = useState(init.workDate)
   const [kind, setKind] = useState<Kind | null>(init.kind)
-  const [pesticide, setPesticide] = useState(init.pesticide)
-  const [fertilizer, setFertilizer] = useState(init.fertilizer)
-  const [amount, setAmount] = useState(init.amount) // 약·관비는 ml, 비료는 포. 종류를 바꾸면 비운다 (단위가 달라서)
+  // 약·비료·관비 이름과 양 (약·관비는 ml, 비료는 포). 종류를 바꾸면 비운다 (이름 목록과 단위가 달라서)
+  const [picked, setPicked] = useState<string[]>([]) // 버튼으로 고른 이름. 수정할 때는 쓰지 않는다 (칸 하나로 하나만)
+  const [pickedAmounts, setPickedAmounts] = useState<Record<string, string>>({}) // 고른 이름마다 적은 양
+  const [typedName, setTypedName] = useState(init.typedName)
+  const [typedAmount, setTypedAmount] = useState(init.typedAmount)
   const [waterMinutes, setWaterMinutes] = useState(init.waterMinutes)
   const [harvestStep, setHarvestStep] = useState<HarvestStep | null>(init.harvestStep)
   const [cycleDays, setCycleDays] = useState(init.cycleDays)
@@ -373,49 +408,59 @@ export default function RecordForm({ house, records, today, editing, onSaved, on
   const boxCount = Number(boxes)
   const bunchCount = Number(bunches)
 
-  /** 지금 고른 내용으로 만든 새 기록과 저장 뒤 보여줄 이름. 아직 덜 골랐으면 null (저장 버튼이 꺼진다) */
-  function buildRecord(): { record: NewRecord; label: string } | null {
+  // 저장할 약·비료 이름과 양: 버튼으로 고른 이름(고른 순서), 그다음 칸에 적은 이름. 하나도 없으면 이름 없는 것 하나
+  const typed = typedName.trim()
+  const namedEntries: NameEntry[] = [
+    ...picked.map((name) => ({
+      key: `picked-${name}`,
+      name,
+      amount: pickedAmounts[name] ?? '',
+      setAmount: (value: string) => setPickedAmounts((a) => ({ ...a, [name]: value })),
+    })),
+    ...(typed !== '' && !picked.includes(typed)
+      ? [{ key: 'typed', name: typed, amount: typedAmount, setAmount: setTypedAmount }]
+      : []),
+  ]
+  const nameEntries: NameEntry[] =
+    namedEntries.length > 0 ? namedEntries : [{ key: 'none', name: null, amount: typedAmount, setAmount: setTypedAmount }]
+
+  /** 지금 고른 내용으로 만든 새 기록(약·비료를 섞었으면 이름마다 하나)과 저장 뒤 보여줄 이름. 아직 덜 골랐으면 null (저장 버튼이 꺼진다) */
+  function buildRecords(): { records: NewRecord[]; label: string } | null {
     if (!dateOk) return null
     const base = { house_no: house.no, work_date: workDate, memo: editing?.memo ?? null }
+    const withNames = (what: string) => (namedEntries.length === 0 ? what : `${what}(${namedEntries.map((e) => e.name).join(', ')})`)
 
-    const used = toAmount(amount)
     switch (kind) {
-      case 'spray': {
-        const name = pesticide.trim()
+      case 'spray':
         return {
-          record: { ...base, type: 'spray', pesticide: name || null, amount_ml: used },
-          label: name ? `약(${name})` : '약',
+          records: nameEntries.map((e) => ({ ...base, type: 'spray', pesticide: e.name, amount_ml: toAmount(e.amount) })),
+          label: withNames('약'),
         }
-      }
-      case 'top_dressing': {
-        const name = fertilizer.trim()
+      case 'top_dressing':
         return {
-          record: { ...base, type: 'top_dressing', fertilizer: name || null, bags: used },
-          label: name ? `비료(${name})` : '비료',
+          records: nameEntries.map((e) => ({ ...base, type: 'top_dressing', fertilizer: e.name, bags: toAmount(e.amount) })),
+          label: withNames('비료'),
         }
-      }
-      case 'fertigation': {
-        const name = fertilizer.trim()
+      case 'fertigation':
         return {
-          record: { ...base, type: 'fertigation', fertilizer: name || null, amount_ml: used },
-          label: name ? `관비(${name})` : '관비',
+          records: nameEntries.map((e) => ({ ...base, type: 'fertigation', fertilizer: e.name, amount_ml: toAmount(e.amount) })),
+          label: withNames('관비'),
         }
-      }
       case 'water':
         return {
-          record: { ...base, type: 'water', water_minutes: waterMinutes },
+          records: [{ ...base, type: 'water', water_minutes: waterMinutes }],
           label: `물(${formatMinutes(waterMinutes)})`,
         }
       case 'harvest':
         if (harvestStep === 'harvest_start') {
-          return { record: { ...base, type: 'harvest_start' }, label: '수확 시작' }
+          return { records: [{ ...base, type: 'harvest_start' }], label: '수확 시작' }
         }
         if (harvestStep === 'harvest' && cycle >= 1) {
-          return { record: { ...base, type: 'harvest', cycle_days: cycle }, label: '수확 완료' }
+          return { records: [{ ...base, type: 'harvest', cycle_days: cycle }], label: '수확 완료' }
         }
         if (harvestStep === 'harvest_amount' && amountTarget !== null && boxCount + bunchCount > 0) {
           return {
-            record: { ...base, type: 'harvest_amount', target_id: amountTarget.id, boxes: boxCount, bunches: bunchCount },
+            records: [{ ...base, type: 'harvest_amount', target_id: amountTarget.id, boxes: boxCount, bunches: bunchCount }],
             label: '수확량',
           }
         }
@@ -426,14 +471,14 @@ export default function RecordForm({ house, records, today, editing, onSaved, on
           problem.kind === 'other'
             ? { ...base, type: 'problem', problem: 'other', problem_name: problem.name, resolved }
             : { ...base, type: 'problem', problem: problem.kind, resolved }
-        return { record, label: `${problemTag(problem).label} ${resolved ? '해결됨' : '생김'}` }
+        return { records: [record], label: `${problemTag(problem).label} ${resolved ? '해결됨' : '생김'}` }
       }
       default:
         return null
     }
   }
 
-  const built = buildRecord()
+  const built = buildRecords()
 
   async function handleSubmit(e: FormEvent) {
     // form의 기본 동작(페이지 새로고침)을 막는다
@@ -443,10 +488,11 @@ export default function RecordForm({ house, records, today, editing, onSaved, on
     setError(null)
     try {
       if (editing === undefined) {
-        await addRecord(built.record)
+        await addRecords(built.records)
         onSaved(`${house.no}동 ${built.label} 저장했어요`)
       } else {
-        await editRecord(editing, built.record, today)
+        // 수정할 때는 이름을 하나만 고를 수 있어서 기록도 하나다
+        await editRecord(editing, built.records[0], today)
         onSaved(`${house.no}동 ${built.label} 수정했어요`)
       }
     } catch {
@@ -474,28 +520,53 @@ export default function RecordForm({ house, records, today, editing, onSaved, on
   }
 
   /**
-   * 종류를 고른다. 다른 종류로 바꾸면 적던 비료 이름과 양은 비운다
-   * (비료 이름이 관비 기록에 들어가지 않게, 약 ml가 비료 포 수로 들어가지 않게)
+   * 종류를 고른다. 다른 종류로 바꾸면 고르고 적던 이름과 양은 비운다
+   * (약 이름이 비료 기록에 들어가지 않게, 약 ml가 비료 포 수로 들어가지 않게)
    */
   function chooseKind(k: Kind) {
     if (k !== kind) {
-      setFertilizer('')
-      setAmount('')
+      setPicked([])
+      setPickedAmounts({})
+      setTypedName('')
+      setTypedAmount('')
       // 물은 그 동에 지난번 준 시간을 미리 맞춘다 (처음이면 1시간). 바꾸지 않고 저장하면 그 시간으로 남는다
       if (k === 'water') setWaterMinutes(lastWaterMinutes(records, house.no) ?? DEFAULT_WATER_MINUTES)
     }
     setKind(k)
   }
 
+  /** 그 이름으로 마지막에 적은 양 (칸에 넣을 글자). 적은 적이 없으면 빈칸 */
+  function lastAmountText(type: AmountType, name: string): string {
+    return toText(lastUsedAmount(records, type, name))
+  }
+
   /**
-   * 지난 약·비료 이름을 버튼으로 고른다. 그 이름으로 마지막에 적은 양을 미리 채운다 (적은 적이 없으면 비운다).
-   * 고른 이름을 풀면(name = '') 양은 그대로 둔다
+   * 약·비료 이름 버튼을 누른다. 골라져 있으면 풀고, 아니면 고르면서 그 이름으로 마지막에 적은 양을 미리 채운다.
+   * 수정할 때는 하나만 고르므로 칸의 이름을 바꾼다 (12단계 전과 같다). 풀 때 양은 그대로 둔다
    */
-  function pickName(type: AmountType, name: string, setName: (name: string) => void) {
-    setName(name)
-    if (name === '') return
-    const last = lastUsedAmount(records, type, name)
-    setAmount(last === null ? '' : String(last))
+  function toggleName(type: AmountType, name: string) {
+    if (picked.includes(name)) {
+      setPicked(picked.filter((n) => n !== name))
+    } else if (typed === name) {
+      setTypedName('') // 칸에 적은 이름과 같은 버튼을 누르면 칸을 비운다
+    } else if (isEditing) {
+      setTypedName(name)
+      setTypedAmount(lastAmountText(type, name))
+    } else {
+      setPicked([...picked, name])
+      setPickedAmounts({ ...pickedAmounts, [name]: lastAmountText(type, name) })
+    }
+  }
+
+  /** [더하기]: 칸에 적은 이름을 고른 버튼으로 옮기고 칸을 비운다. 적어 둔 양도 따라간다 */
+  function addTypedName() {
+    if (typed === '') return
+    if (!picked.includes(typed)) {
+      setPicked([...picked, typed])
+      setPickedAmounts({ ...pickedAmounts, [typed]: typedAmount })
+    }
+    setTypedName('')
+    setTypedAmount('')
   }
 
   /** 문제를 고르면 "생김 / 해결됨"을 지금 상태의 반대로 미리 골라 둔다 (지금 있으면 해결됨, 없으면 생김) */
@@ -574,37 +645,21 @@ export default function RecordForm({ house, records, today, editing, onSaved, on
           )}
         </section>
 
-        {kind === 'spray' && (
+        {(kind === 'spray' || kind === 'top_dressing' || kind === 'fertigation') && (
           <section className="form-card" ref={detailRef}>
             <NamePicker
-              id="pesticide"
-              what="약"
-              known={pesticideNames(records)}
-              firstTimeHint="처음 치는 약이면 적어 주세요"
-              value={pesticide}
-              onChange={setPesticide}
-              onPick={(name) => pickName('spray', name, setPesticide)}
+              id="item-name"
+              what={kind === 'spray' ? '약' : '비료'}
+              known={kind === 'spray' ? pesticideNames(records) : fertilizerNames(records, kind)}
+              firstTimeHint={kind === 'spray' ? '처음 치는 약이면 적어 주세요' : '처음 쓰는 비료면 적어 주세요'}
+              multiple={!isEditing}
+              picked={picked}
+              typedName={typedName}
+              onToggle={(name) => toggleName(kind, name)}
+              onType={setTypedName}
+              onAdd={addTypedName}
             />
-            <MlField id="amount-ml" label="원액 양" value={amount} onChange={setAmount} />
-          </section>
-        )}
-
-        {(kind === 'top_dressing' || kind === 'fertigation') && (
-          <section className="form-card" ref={detailRef}>
-            <NamePicker
-              id="fertilizer"
-              what="비료"
-              known={fertilizerNames(records, kind)}
-              firstTimeHint="처음 쓰는 비료면 적어 주세요"
-              value={fertilizer}
-              onChange={setFertilizer}
-              onPick={(name) => pickName(kind, name, setFertilizer)}
-            />
-            {kind === 'top_dressing' ? (
-              <BagsField value={amount} onChange={setAmount} />
-            ) : (
-              <MlField id="amount-ml" label="원액 양" value={amount} onChange={setAmount} />
-            )}
+            <AmountFields unit={kind === 'top_dressing' ? 'bags' : 'ml'} entries={nameEntries} />
           </section>
         )}
 
@@ -742,7 +797,7 @@ export default function RecordForm({ house, records, today, editing, onSaved, on
         <div className="save-bar">
           {error !== null && <p className="field-error">{error}</p>}
           <button type="submit" className="save" disabled={built === null || saving}>
-            {saving ? '저장하는 중…' : '저장'}
+            {saving ? '저장하는 중…' : built !== null && built.records.length > 1 ? `저장 (${built.records.length}개)` : '저장'}
           </button>
         </div>
       </form>

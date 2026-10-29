@@ -29,12 +29,25 @@ export type NewRecord = DistributiveOmit<FarmRecord, 'id' | 'recorded_by' | 'rec
  * (인터넷이 느리거나 끊겨도 저장은 바로 끝나고 화면이 넘어가게)
  */
 export async function addRecord(input: NewRecord): Promise<FarmRecord> {
+  const [record] = await addRecords([input])
+  return record
+}
+
+/**
+ * 기록 여러 개를 한 번에 저장한다 (12단계: 섞어 친 약·비료를 이름마다 하나씩).
+ * 일부만 남지 않게 한 번에(트랜잭션) 저장하고, 입력 시각은 모두 같다. 나머지는 addRecord와 같다
+ */
+export async function addRecords(inputs: readonly NewRecord[]): Promise<FarmRecord[]> {
   const user = getCurrentUser()
   if (user === null) throw new Error('로그인 전에는 기록할 수 없어요')
-  const record: FarmRecord = { ...input, id: newId(), recorded_by: user.id, recorded_at: nowTimestamp() }
-  await db.records.add({ ...record, synced: 0 })
+  const recordedAt = nowTimestamp()
+  const records: FarmRecord[] = inputs.map((input) => ({ ...input, id: newId(), recorded_by: user.id, recorded_at: recordedAt }))
+  // 트랜잭션 밖의 bulkAdd는 하나가 실패해도 나머지는 남을 수 있어서 트랜잭션 안에서 한다 (하나라도 실패하면 모두 취소)
+  await db.transaction('rw', db.records, async () => {
+    await db.records.bulkAdd(records.map((r) => ({ ...r, synced: 0 as const })))
+  })
   void uploadPending()
-  return record
+  return records
 }
 
 /**

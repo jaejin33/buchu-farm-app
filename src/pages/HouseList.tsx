@@ -39,19 +39,8 @@ export default function HouseList({
 }: Props) {
   const rows = houses.map((house) => ({ house, status: getHouseStatus(records, house.no, today) }))
 
-  // 수확 중인 동이 맨 앞. 그다음 수확 가능일이 이른 순 (이미 수확 가능한 동은 오래 기다린 동이 앞).
-  // 수확 기록이 없는 동은 맨 뒤, 같으면 동 번호 순
-  rows.sort((a, b) => {
-    const ha = a.status.kind === 'harvesting'
-    const hb = b.status.kind === 'harvesting'
-    if (ha !== hb) return ha ? -1 : 1
-    const da = a.status.readyDate
-    const db = b.status.readyDate
-    if (da === db) return a.house.no - b.house.no
-    if (da === null) return 1
-    if (db === null) return -1
-    return da < db ? -1 : 1
-  })
+  // 구역 안에서는 늘 동 번호 순. 기록에 따라 자리가 바뀌면 찾던 동을 놓치기 쉬워서 고정한다
+  rows.sort((a, b) => a.house.no - b.house.no)
 
   // 구역 순서는 houses.ts에 적힌 순서를 따른다
   const zones = [...new Set(houses.map((h) => h.zone))]

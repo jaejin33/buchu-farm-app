@@ -146,25 +146,20 @@ TypeScript 내장 타입 `Record<K, V>`는 "K의 모든 값마다 V가 하나씩
 ### 정렬: 비교 함수
 
 ```tsx
-rows.sort((a, b) => {
-  const da = a.status.readyDate   // 수확 가능일. 수확 기록이 없으면 null
-  const db = b.status.readyDate
-  if (da === db) return a.house.no - b.house.no
-  if (da === null) return 1        // 날짜 모르는 동은 뒤로
-  if (db === null) return -1
-  return da < db ? -1 : 1
-})
+rows.sort((a, b) => a.house.no - b.house.no)   // 동 번호 순
 ```
 
-Java의 `Comparator`와 규칙이 같다. 음수면 a가 앞, 양수면 b가 앞이다. Java로 쓰면 이렇다.
+Java의 `Comparator`와 규칙이 같다. 비교 함수가 음수를 돌려주면 a가 앞, 양수면 b가 앞, 0이면 그대로다. `a.house.no - b.house.no`는 a의 번호가 작으면 음수라서 번호가 작은 동이 앞에 온다. Java로 쓰면 이렇다.
 
 ```java
-rows.sort(Comparator
-    .comparing((Row r) -> r.status().readyDate(), Comparator.nullsLast(Comparator.naturalOrder()))
-    .thenComparingInt(r -> r.house().no()));
+rows.sort((a, b) -> a.house().no() - b.house().no());
+// 또는
+rows.sort(Comparator.comparingInt(r -> r.house().no()));
 ```
 
-JS에는 `nullsLast` 같은 도우미가 없어서 직접 썼다.
+- `(a, b) => ...`: 화살표 함수. Java 람다 `(a, b) -> ...`와 같고 화살표 모양만 다르다 (`=>`와 `->`)
+- `sort`는 Java의 `List.sort`처럼 **배열 자체를 바꾼다** (새 배열을 돌려주는 게 아님)
+- 10월 30일 전에는 수확 가능일 순이라 "날짜 없는 동은 뒤로" 같은 줄이 더 있었다. 지금은 동 번호 순 한 줄이다 ([[2026-10-22-2단계-코드-읽기]] 8번)
 
 ### 중복 없는 구역 목록
 
